@@ -1,0 +1,3979 @@
+
+	이 문서는 Nexus-S 에서 사용하는 커널을 EZ-S5PV210 에서 사용하기 위해서 패치하는 과정을 기록한 문서이다.
+
+	작업 위치는 zero-server /staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux
+	참조 커널은 boggle70-desktop /staff/boggle70/I11-0022_EM-S5PV210/kernel/patch-from-eabi-two/linux-2.6.35.7
+
+	1. 상황 설명
+		최초 커널은 2.6.35 버전의 공식 커널에서 배포하는 커널을 사용하였으나 
+		미적용된 사항이 많고 패치가 느려서 수정사항이 너무 많았다.
+		이후에 마이크로비젼에서 사용했던 커널에 적용된 것을 사용하고자 2.6.35.7 을 포팅하였으나 
+		제품에 사용하기에는  안드로이드 적용에는 미흡한 점이 많았다.
+
+		이후 아로마소프트와 Nexus-S 를 작업하면서 제공받은 커널에 안드로이및 삼성 V210 관련된 패치가 많아
+		사용하기로 결정을 하고 진행을 한다.
+
+		원소스의 출처는 아래와 같다.
+			Nexus S 소스는 2011.11.23일 현재 안드로이드 git에서 다운로드 받을
+			수 없으므로 미러링 사이트중 하나를 이용해야 한다.
+
+			github	-> 현재 사용하는 커널 소스
+			git clone git://github.com/CyanogenMod/samsung-kernel-crespo.git
+
+			codeaurora	-> 
+			# git clone git://codeaurora.org/kernel/samsung.git
+			Initialized empty Git repository in /home/gyutae.bae/bin/omapzoom/kernel/
+			test2/samsung/.git/
+			remote: Counting objects: 1637454, done.
+			remote: Compressing objects: 100% (255791/255791), done.
+			remote: Total 1637454 (delta 1367955), reused 1637454 (delta 1367955)
+			Receiving objects: 100% (1637454/1637454), 326.04 MiB | 282 KiB/s,
+			done.
+			Resolving deltas: 100% (1367955/1367955), done.
+			warning: remote HEAD refers to nonexistent ref, unable to checkout.
+			# git checkout origin/aosp-new/android-samsung-2.6.35-gingerbread
+
+		패치작업은 boggle70-desktop 에 있는 
+			/staff/boggle70/I11-0022_EM-S5PV210/kernel/patch-from-eabi-two/patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.17-full 
+		파일을 갖고 작업을 진행하며 해당 패치는 같은 디록토리의 README.txt 에 기록되어 있으면 내용은 아래와 같다.
+			  14     -rw-r--r--  1 root root 91453193 2011-12-13 22:35 linux-2.6-samsung-2.6.35-samsung-73a7976.tar.gz
+			  15         최초에 samsung 으로 부터 가져온 소스
+			  16     -rw-r--r--  1 root root   591436 2011-12-13 22:35 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.12
+			  17         1차 패치
+			  18     -rw-r--r--  1 root root    81435 2011-12-13 22:35 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.14
+			  19         2차 패치
+			  20     -rw-r--r--  1 root root   655686 2011-12-13 22:35 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.14-full
+			  21         공동작업 1,2차 패치를 모은 full 버전
+			  22     -rw-r--r--  1 root root 17220703 2011-12-13 22:35 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.15-additional
+			  23         1,2차 패치후 이루어진 eabi 서버에서의 마직막 수정사항의 패치
+			  24     -rw-r--r--  1 root root   504686 2011-12-13 22:42 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.16-12.13-freefrug
+			  25         freefrug 가 I11-0022_EM-S5PV210 를 만든어서 이전하여 2011.11.13일까지 이루어진 수정사항
+			  26     -rw-r--r--  1 root root 17888738 2011-12-14 00:06 patch-linux-2.6-samsung-2.6.35-samsung-73a7976-2011.04.17-full
+			  27         최초의 오리지날 소스로부터 2011.11.13일까지 이루어진 모든 수정사항
+
+		많은 패치들이 이미 적용된 것도 있고 6410 관련한 패치내용도 있고 중복및 복잡한 상황인 것도 있다.
+		이것은 자동으로 패치를 수행할수 있는 상황이 아니므로 각 항목을 하나식 검토하여 필요한 사항들만을 적용한다.
+		이전의 작업을 통해 패치항목은 220여 군데로 확인되었었다.
+		
+		패치는 기본적으로 최소의 수정으로 보드 지원을 하는 것으로 최대한 기존 커널의 것들을 그대로 쓰면서
+		falinux 에서 가져왔던 인터페이스 기조를 유지한다.
+		ADC 패치는 이미 되어 있으므로 모두 무시한다.
+		CLOCK 패치는 되어 있는 것으로 간주하고 추후 문제되는 부분에 대해서만 수정한다.
+		DMA 패치는 모두 무시한다.
+		USB-OTG 패치는 모두 무시한다.
+
+	2. 진행
+		1 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/.gitignore linux-2.6.35/.gitignore
+			무시한다.
+
+		84 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/.mailmap linux-2.6.35/.mailmap
+			무시한다.
+
+		195 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/Makefile linux-2.6.35/Makefile
+			3 SUBLEVEL = 35
+			4 EXTRAVERSION = .14-falinux
+			5 NAME = Yokohama
+		
+		207 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/REPORTING-BUGS linux-2.6.35/REPORTING-BUGS
+			 무시한다
+
+		279 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/Kconfig linux-2.6.35/arch/arm/Kconfig 
+			메모리 모델에 관련된 사항으로 이미 적용되어 무시한다.
+
+		290 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/boot/compressed/head.S linux-2.6.35/arch/arm/boot/compressed/head.S
+			커널 디버깅시에 사용했던 것으로 패치하지 않는다.
+
+		550 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/common/pl330.c linux-2.6.35/arch/arm/common/pl330.c
+			일부 패치한다.
+			 483     cnt--; /* DMAC increments by 1 internally */
+			 484     buf[1] = cnt & 0xff;
+			 485 
+			 486     PL330_DBGCMD_DUMP(SZ_DMALP, "\tDMALP_%c %u\n", loop ? '1' : '0', cnt);
+			 487 
+
+		600 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/configs/ezs3c6410_defconfig linux-2.6.35/arch/arm/configs/ezs3c6410_defconfig
+			6410 관련 내용으로 패치하지 않는다.
+
+		2480 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/configs/ezs5pv210_defconfig linux-2.6.35/arch/arm/configs/ezs5pv210_defconfig
+			이 항목은 이후에 바뀔수 있는 항목이다.
+			파일을 그대로 복사한다.
+
+		4256 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/include/asm/memory.h linux-2.6.35/arch/arm/include/asm/memory.h
+			공백 수정 무시
+
+		4267 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/kernel/head-common.S linux-2.6.35/arch/arm/kernel/head-common.S
+			공백 수정 무시
+
+		4278 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/kernel/head.S linux-2.6.35/arch/arm/kernel/head.S
+			290 라인과 같이 커널 디버깅시에 사용했던 것으로 패치하지 않는다.
+
+		4381 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c2410/include/mach/dma.h linux-2.6.35/arch/arm/mach-s3c2410/include/mach/dma.h
+			 2410 머신관련내용으로 무시한다.
+
+		4406 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/Kconfig linux-2.6.35/arch/arm/mach-s3c64xx/Kconfig
+		4435 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/Makefile linux-2.6.35/arch/arm/mach-s3c64xx/Makefile
+		4446 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/cpu.c linux-2.6.35/arch/arm/mach-s3c64xx/cpu.c
+		4467 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/dev-audio.c linux-2.6.35/arch/arm/mach-s3c64xx/dev-audio.c
+		4484 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/dev-spi.c linux-2.6.35/arch/arm/mach-s3c64xx/dev-spi.c
+		4498 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/include/mach/dma.h linux-2.6.35/arch/arm/mach-s3c64xx/include/mach/dma.h
+		4512 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/include/mach/map.h linux-2.6.35/arch/arm/mach-s3c64xx/include/mach/map.h
+		4541 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/include/mach/memory.h linux-2.6.35/arch/arm/mach-s3c64xx/include/mach/memory.h
+		4551 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/include/mach/regs-clock.h linux-2.6.35/arch/arm/mach-s3c64xx/include/mach/regs-clock.h
+		4642 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/include/mach/regs-otg.h linux-2.6.35/arch/arm/mach-s3c64xx/include/mach/regs-otg.h
+		4926 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/mach-ezs3c6410.c linux-2.6.35/arch/arm/mach-s3c64xx/mach-ezs3c6410.c
+		5299 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/s3c6410.c linux-2.6.35/arch/arm/mach-s3c64xx/s3c6410.c
+		5314 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s3c64xx/setup-fb-24bpp.c linux-2.6.35/arch/arm/mach-s3c64xx/setup-fb-24bpp.c
+			6410 관련 패치 무시.
+
+		5328 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5p6440/include/mach/dma.h linux-2.6.35/arch/arm/mach-s5p6440/include/mach/dma.h
+		5339 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5p6442/include/mach/dma.h linux-2.6.35/arch/arm/mach-s5p6442/include/mach/dma.h
+		5350 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5p6450/include/mach/dma.h linux-2.6.35/arch/arm/mach-s5p6450/include/mach/dma.h
+		5361 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pc100/Kconfig linux-2.6.35/arch/arm/mach-s5pc100/Kconfig
+		5373 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pc100/clock.c linux-2.6.35/arch/arm/mach-s5pc100/clock.c
+		5432 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pc100/dma.c linux-2.6.35/arch/arm/mach-s5pc100/dma.c
+		5803 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pc100/include/mach/dma.h linux-2.6.35/arch/arm/mach-s5pc100/include/mach/dma.h
+			이기종 관련 패치 무시
+
+
+		5816 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/Kconfig linux-2.6.35/arch/arm/mach-s5pv210/Kconfig
+			아래 항목은 패치하지 않는다.
+			필요에 따라 패치한 것으로 추후 필요시 패치할수 있다.	
+			하지만 확인해 보니 아래의 항목으로 사용되는 함수들은 사용되지 않는 것으로 보인다.
+			  5819 @@ -12,7 +12,7 @@
+			  5820  config CPU_S5PV210
+			  5821     bool
+			  5822     select PLAT_S5P
+			  5823 -   select S3C_PL330_DMA
+			  5824 +   select SAMSUNG_DMADEV
+			  5825     select S5P_EXT_INT
+			  5826     help
+			  5827       Enable S5PV210 CPU support
+
+			ADC 관련 내용은 이미 패치되어 있으므로 패치하지 않는다.
+
+			아래의 항목을 적용한다.
+			148 config MACH_EZS5PV210
+			149     bool "EZS5PV210"
+			150     select ARCH_FALINUX
+			151     select CPU_S5PV210
+			152     select ARCH_DISCONTIGMEM_ENABLE
+			153     select S3C_DEV_WDT
+			154     select HAVE_S3C2410_WATCHDOG
+			155     select S3C_DEV_I2C1
+			156     select S3C_DEV_I2C2
+			157     select HAVE_PWM
+			158     select ARCH_HAS_CPUFREQ
+			159     select S3C_DEV_HSMMC
+			160     select S3C_DEV_HSMMC1 if !S5PV210_SD_CH0_8BIT
+			161     select S3C_DEV_HSMMC2
+			162     select S3C_DEV_HSMMC3 if !S5PV210_SD_CH2_8BIT
+			163     select S5PV210_SETUP_SDHCI
+			164     select S5PV210_POWER_DOMAIN
+			165     help
+			166       Machine support for FALinux EZ-S5PV210
+			167 
+			168 config PHYS_DRAM_BASE_0x30000000
+			169     bool "if [Y] then dram-base is 0x30000000"
+			170     depends on MACH_EZS5PV210
+			171     help
+			172         for plat-mem 512Mib @0x30000000 & @0x40000000 (depend on bootloader)
+			173
+
+	  5880 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/Makefile linux-2.6.35/arch/arm/mach-s5pv210/Makefile
+		아래와 같이 적용
+			27 obj-$(CONFIG_MACH_GONI)     += mach-goni.o
+			28 obj-$(CONFIG_MACH_EZS5PV210)+= mach-ezs5pv210.o
+			29 obj-$(CONFIG_MACH_HERRING)  += mach-herring.o herring-rfkill.o
+
+	  5891 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/adc.c linux-2.6.35/arch/arm/mach-s5pv210/adc.c
+		이미 패치되어 있어 적용하지 않는다.
+
+	  6296 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/clock.c linux-2.6.35/arch/arm/mach-s5pv210/clock.c
+		틀럭 관련 패치는 모두 적용되어 있는 것으로 판단한다.
+
+	  6412 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/cpu.c linux-2.6.35/arch/arm/mach-s5pv210/cpu.c
+		USB-OTG 관련 패치는 무시한다.
+
+	  6432 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/dma.c linux-2.6.35/arch/arm/mach-s5pv210/dma.c
+		  이곳에 적용된 패치는 모두 PL330 DMA 관련 패치이므로 무시한다.
+
+	6818 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/adc.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/adc.h
+		  이미 적용되어 있음
+
+	6894 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/dma.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/dma.h
+		  PL330을 위한 DMA 패치는 무시한다.
+
+	909 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/irqs.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/irqs.h
+		다른 항목을 이미 적용되어 있음
+		  115 #ifdef CONFIG_TOUCHSCREEN_ADC1
+		  116 #define IRQ_TC          IRQ_PENDN1
+		  117 #else
+		  118 #define IRQ_TC          IRQ_PENDN
+		  119 #endif
+		  
+	933 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/map.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/map.h
+		로컬 버스 매핑을 위한 패치를 적용한다.
+			16 #include <plat/map-base.h>
+			17 #include <plat/map-s5p.h>
+			18 
+			19 #define S5PV210_PA_CS0     (0x80000000)
+			20 #define S5PV210_PA_CS1     (0x88000000)
+			21 #define S5PV210_PA_CS2     (0x90000000)
+			22 #define S5PV210_PA_CS3     (0x98000000)
+			23 #define S5PV210_PA_CS4     (0xA0000000)
+			24 #define S5PV210_PA_CS5     (0xA8000000)
+
+		낸드 패핑을 위한 패치를 적용한다.
+			arch/arm/mach-s5pv210/dev-onenand.c 와 같이  NAND에 관련된 디바이스를 하나 만들고 플랫폼으로 지원하
+			26 #define S5PC110_PA_ONENAND  (0xB0000000)
+			27 #define S5PC110_PA_ONENAND_DMA  (0xB0600000)
+			28 
+			29 /* NAND */
+			30 #define S5PV210_PA_NAND     (0xB0E00000)
+			31 #define S5P_PA_NAND     S5PV210_PA_NAND
+			32 
+			33 #define S5PV210_SZ_NAND     SZ_1M
+			34 #define S5P_SZ_NAND     S5PV210_SZ_NAND
+		
+		메모리 시작위치를 정하는 패치를 한다.
+			160 #if defined(CONFIG_MACH_SMDKV210)
+			161 #define S5PV210_PA_SDRAM    (0x20000000)
+			162 #elif defined(CONFIG_MACH_EZS5PV210)
+			163 #define S5PV210_PA_SDRAM        PHYS_OFFSET
+			164 #else
+			165 #define S5PV210_PA_SDRAM    (0x30000000)
+			166 #endif
+			167 #define S5P_PA_SDRAM        S5PV210_PA_SDRAM
+		
+		ADC 패치는 이미 적용되었으므로 무시한다.
+	
+	6982 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/memory.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/memory.h
+		기존 패치와 충돌이 나지 않도록 패치한다.
+			16 #if defined(CONFIG_MACH_SMDKV210)
+			17 #define PHYS_OFFSET     UL(0x20000000)
+			18 #define SECTION_SIZE_BITS   28
+			19 #elif deifned(CONFIG_MACH_EZS5PV210)
+			20     #if   defined(CONFIG_PHYS_DRAM_256M_AT_0x20000000)
+			21         #define PHYS_OFFSET         UL(0x20000000)
+			22         #define SECTION_SIZE_BITS   28
+			23     #elif defined(CONFIG_PHYS_DRAM_512M_AT_0x20000000)  
+			24         #define PHYS_OFFSET         UL(0x20000000)
+			25         #define SECTION_SIZE_BITS   29
+			26     #elif defined(CONFIG_PHYS_DRAM_512M_AT_0x30000000)  
+			27         #define PHYS_OFFSET         UL(0x30000000)
+			28         #define SECTION_SIZE_BITS   29
+			29     #elif defined(CONFIG_PHYS_DRAM_1G_AT_0x20000000)    
+			30         #define PHYS_OFFSET         UL(0x20000000)
+			31         #define SECTION_SIZE_BITS   30
+			32     #else                                            
+			33         #define PHYS_OFFSET         UL(0x20000000)
+			34         #define SECTION_SIZE_BITS   28
+			35     #endif
+			36 #else
+			37 #define PHYS_OFFSET     UL(0x30000000)
+			38 #define SECTION_SIZE_BITS   28
+			39 #endif
+			40 
+			41 #define CONSISTENT_DMA_SIZE (SZ_8M + SZ_4M + SZ_2M)
+			42 
+			43 /* Maximum of 256MiB in one bank */
+			44 #define MAX_PHYSMEM_BITS    32
+			45 #define NODE_MEM_SIZE_BITS   28
+	7032 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/regs-adc.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/regs-adc.h
+		ADC 관련 레지스터 패치로 무시한다.
+		
+	7157 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/system.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/system.h
+		watchdog 관련 내용으로 이미 패치되어 있다
+		
+	7182 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/include/mach/ts-s3c.h linux-2.6.35/arch/arm/mach-s5pv210/include/mach/ts-s3c.h
+		유보한다.
+		
+	7232 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/mach-ezs5pv210.c linux-2.6.35/arch/arm/mach-s5pv210/mach-ezs5pv210.c
+		전체를 복사한다.
+		
+	8071 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mach-s5pv210/setup-fb.c linux-2.6.35/arch/arm/mach-s5pv210/setup-fb.c
+		패치되어 있는 것으로 보이나 clk_round_rate 관련 부분은 찾을수 없다.
+
+	8088 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mm/dma-mapping.c linux-2.6.35/arch/arm/mm/dma-mapping.c
+	8124 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mm/vmregion.c linux-2.6.35/arch/arm/mm/vmregion.c
+	8146 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/mm/vmregion.h linux-2.6.35/arch/arm/mm/vmregion.h
+		dma 할당에서 크기에 대한 align 을 실행하도록 하는 패치이다. 적용한다.
+		
+	8158 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-s5p/cpu.c linux-2.6.35/arch/arm/plat-s5p/cpu.c
+		USB OTG  관련 패치로 무시한다.
+
+	8177 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-s5p/devs.c linux-2.6.35/arch/arm/plat-s5p/devs.c
+		s5pv210 에서 nand 를 사용하기 위한 dev 패치로 nexus herring 커널에서는 onenand를 사용하기 때문에 관련된 부분이 없다.
+		패치한다.
+		
+	8177 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-s5p/devs.c linux-2.6.35/arch/arm/plat-s5p/devs.c
+		ADC 관련 패치는 이미 적용되어 있어 적용하지 않는다.
+		NAND 관련 패치는 해당 커널에서 별도의 파일에 대해 mach-s5pv210 디렉토리에 dev-xxx.c 라는 형태로 각각 적용하고 있다.
+		따라서 해당 파일을 복사해 mtd nand 를 지원하도록 하고 Makefile 과 Kconfig 를 함께 수정해준다.
+		arch/arm/mach-s5pv210/dev-nand.c
+			1 /*
+			2  * linux/arch/arm/mach-s5pv210/dev-nand.c
+			3  *
+			4  *  Copyright (c) 2008-2010 Samsung Electronics
+			5  *  Kyungmin Park <kyungmin.park@samsung.com>
+			6  *
+			7  * S5PC110 series device definition for NAND devices
+			8  *
+			9  * modify from linux/arch/arm/mach-s5pv210/dev-onenand.c
+			10  *
+			11  * This program is free software; you can redistribute it and/or modify
+			12  * it under the terms of the GNU General Public License version 2 as
+			13  * published by the Free Software Foundation.
+			14  */
+			15 
+			16 #include <linux/kernel.h>
+			17 #include <linux/platform_device.h>
+			18 #include <linux/mtd/mtd.h>
+			19 #include <linux/mtd/nand.h>
+			20 
+			21 #include <mach/irqs.h>
+			22 #include <mach/map.h>
+			23 
+			24 static struct resource s5pv210_nand_resources[] = {
+			25     [0] = {
+			26         .start  = S5P_PA_NAND,
+			27         .end    = S5P_PA_NAND + S5P_SZ_NAND - 1,
+			28         .flags  = IORESOURCE_MEM,
+			29     },
+			30 };
+			31 
+			32 struct platform_device s5pv210_device_nand = {
+			33     .name       = "s3c-nand",
+			34     .id     = -1,
+			35     .num_resources  = ARRAY_SIZE(s5pv210_nand_resources),
+			36     .resource   = s5pv210_nand_resources,
+			37 };
+			38 
+			39 void s5pv210_nand_set_platdata(struct platform_nand_data *pdata)                     
+			40 {
+			41     struct platform_nand_data *pd;                     
+			42 
+			43     pd = kmemdup(pdata, sizeof(struct platform_nand_data), GFP_KERNEL);                     
+			44     if (!pd)
+			45         printk(KERN_ERR "%s: no memory for platform data\n", __func__);
+			46     s5pv210_device_nand.dev.platform_data = pd;
+			47 }
+
+		arch/arm/mach-s5pv210/clock.c
+			374     }, {
+			375         .name       = "onenand",
+			376         .id     = -1,
+			377         .parent     = &clk_hclk_psys.clk,
+			378         .enable     = s5pv210_clk_ip1_ctrl,
+			379         .ctrlbit    = (1 << 24),
+			380         .dev        = &s5pc110_device_onenand,
+			381     }, {
+			382         .name       = "nand",
+			383         .id     = -1,
+			384         .parent     = &clk_hclk_psys.clk,
+			385         .enable     = s5pv210_clk_ip1_ctrl,
+			386         .ctrlbit    = ((1 << 28) | (1 << 24)),
+			387         .dev        = &s5pv210_device_nand,
+			388     }, {
+			389         .name       = "cfcon",
+
+		arch/arm/mach-s5pv210/Kconfig
+			174 config S5PV210_DEV_NAND
+			175     bool
+			176     default y if MACH_EZS5PV210
+			177     help
+			178       Compile in platform device definition for NAND controller
+
+		arch/arm/mach-s5pv210/Makefile
+			45 obj-$(CONFIG_S3C64XX_DEV_SPI)   += dev-spi.o
+			46 obj-$(CONFIG_S5PC110_DEV_ONENAND) += dev-onenand.o
+			47 obj-$(CONFIG_S5PV210_DEV_NAND)      += dev-nand.o
+
+	8280 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-s5p/include/plat/media.h linux-2.6.35/arch/arm/plat-s5p/include/plat/media.h
+		미디어 디바이스 관련된 사항들은 이미 패치가 되어 있다.
+		하지만 경로는 plat-s5p 가 아닌 mach-s5pv210 내의 media.h 아래와 같은 곳에 있다.
+		아래의 경로에도 파일이 있지만 다른 내용이 들어가 있다.
+		arch/arm/mach-s5pv210/include/mach/media.h
+
+	8302 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/Kconfig linux-2.6.35/arch/arm/plat-samsung/Kconfig
+		ADC 관련된 사항은 이미 패치되어 있다.
+		PL330 관련된 사항은 이미 패치되어 있다.
+		하지만 해당 드라이버는 상이한 것으로 보인다. amba ip 에서 지원하는 pl330 이 있고
+		s3c 플랫폼의 형태로 지원하는 pl330 디바이스가 조금 다르게 운용되는 것 같다.
+
+	8381 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/adc.c linux-2.6.35/arch/arm/plat-samsung/adc.c
+		ADC 를 이용한 touch 고나련 패치로 보이나 해당 내용을 적용한 곳을 찾지 못해서 유보함
+
+	8399 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/clock-clksrc.c linux-2.6.35/arch/arm/plat-samsung/clock-clksrc.c
+		디버깅 메세지 관련된 분으로 무시한다.
+
+	8411 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/dev-fb.c linux-2.6.35/arch/arm/plat-samsung/dev-fb.c
+		6410에서 두개이상의 lcd 패널을 지원하기 위해서 패치한 것으로 보인다.
+		패치한다.
+			arch/arm/plat-samsung/dev-fb.c
+				59 #ifdef CONFIG_ARCH_FALINUX
+				60 void __init s3c_fb_set_platdata(struct s3c_fb_platdata *pd, int num_platdata)
+				61 #else
+				62 void __init s3c_fb_set_platdata(struct s3c_fb_platdata *pd)
+				63 #endif
+				64 {   
+				65     struct s3c_fb_platdata *npd;
+				66     int size;
+				67     
+				68 #ifdef CONFIG_ARCH_FALINUX
+				69     size = sizeof(struct s3c_fb_platdata) * num_platdata;
+				70 #else
+				71     size = sizeof(struct s3c_fb_platdata);
+				72 #endif
+				73     
+				74     if (!pd) {
+				75         printk(KERN_ERR "%s: no platform data\n", __func__);
+				76         return;
+				77     }
+				78     
+				79 #ifdef CONFIG_ARCH_FALINUX
+				80     npd = kmemdup(pd, size, GFP_KERNEL);
+				81 #else
+				82     npd = kmemdup(pd, sizeof(struct s3c_fb_platdata), GFP_KERNEL);
+				83 #endif 
+				84     if (!npd)
+				85         printk(KERN_ERR "%s: no memory for platform data\n", __func__);
+				86 
+
+	8443 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/dev-nand.c linux-2.6.35/arch/arm/plat-samsung/dev-nand.c
+		EXPORT _SYMBOL 을 없앴다.
+		이유를 확인해보니 arch/arm/mach-s5pv210/dev-nand.c 관련한 패치를 적용했는데 해당하는 내용이
+		arch/arm/plat-samsung/dev-nand.c 에 적용되어 있다.
+		이상한 생각이 들어서 onenand 도 파일들을 확인해 보았다.
+		plat-samsung 에도 dev-onenand.c 파일이 있고 mach-s5pv210 에도 dev-onenand.c 파일이 있었고, 내용도 동일했다.
+		다만..  plat-samsung 에 있는 onenand 는 콘트롤러의 물리적 위치가 삼성의 칩세트마다 다를수 있으므로
+		S3C_PA_ONENAND 라는 이름을 사용하면서 머신의 map 파일에서 S3C_PA_ONENAND 를 선언하면서
+		칩세트별 주소를 넣어 동작시키도록 되어 있다.
+		하지만 v210 에서는 그렇게 하지 않고 별도의 파일을 쓰고 있다.
+		방법은 2가지 이다. 
+		mach-s5pv210 에 별도로 선언해서 가져가는 방법.
+		plat-samsung 에 있는 것을 사용하는 방법.
+		
+		첫번째 방법을 사용할 경우 디바이스의 시작위치와 끝위치에 대한 부분을 map 파일에 선언해서 사용해야 한다.
+		두번재 방법을 사용할 경우 S3C_PA_NAND 의 선언을 map 파일에서 선언해서 s5pv210 의 nand 물리주소를 사용하도록 한다.
+		나는 두번째 방법을 하기로 한다.
+		이 경우 CONFIG_S5Pxyyy_DEV_NAND 와 같이 해서 mach 의 설정을 따르는 것이 아닌
+		CONFIG_S3C_DEV_NAND 가 선언되도록 하여 plat-samsung 의 파일을 사용하도록 한다.
+		
+		해당하는 파일을 사용하도록 하고 이전의 패치는 되돌린다.
+			arch/arm/mach-s5pv210/dev-nand.c 파일 삭제
+			arch/arm/mach-s5pv210/Makefile 원위치
+			arch/arm/mach-s5pv210/Kconfig  아래와 같이 수정
+				174 config S3C_DEV_NAND
+				175     bool
+				176     default y if MACH_EZS5PV210
+				177     help 
+				178       Compile in platform device definition for NAND controller
+		이 경우에 플랫폼 디바이스의 이름이 s3c2410-nand 가 되는데 이부분은
+		arch/arm/mach-s5pv210/mach-ezs5pv210.c 파일에서 
+		s3c_device_nand.name = "s3c_nand" 와 같은 형태로 해서 수정할수 있다.
+		단... 위의 선언을 해줄때 해당 함수가 __init  으로 선언되지 않도록 주의한다.
+		따라서 해당 EXPORT_SYMBOL 을 선언하지 않도록 한 것은 무시한다.
+		
+	8452 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/dev-ts.c linux-2.6.35/arch/arm/plat-samsung/dev-ts.c
+		바로 전의 예와 마찬가지로  dev-ts 는 두가지 방법으로 구현된다.
+		
+		plat-samsung/dev-ts.c 에서 이름은 s3c24xx_ts_set_platdata 와 같은 형태를 띠고 있거나...
+		plat-s3c24xx/devs.c 에서 동일한 이름을 갖거나...
+		아마도 plat-samsung 으로 통일해 가면서 이전의 이름 형식만을 그대로 따른것 같다.
+		
+		plat-samsung 을 사용하게 되면 touch 의 이름은 s3c64xx-ts 를 갖게 된다.
+		하지만 여기에는 dev.platform 을 설정하는 부분이 없는데...
+		해당하는 부분만을 arch/arm/mach-s5pv210/mach-ezs5pv210.c 파일에서 구현해 주어야 한다.
+		터치를 가져와서 패치했지만... 해당 부분은 수정해 주어야 한다.
+		s3c_ts_mach_info 만을 선언하고 s3c_ts_set_platdata 를 호출해서 디바이스가 설정되도록 바꾸자.
+		가능한 기존 커널의 리소스를 사용하는 방법으로 따라가는 것이 이후에 부담이 적어지게 된다.
+		음... 그런데 resource 가 조금 문제가 있다.
+		시작위치, 크기 irq 리소스의 갯수등이 다르다.  하드웨어를 확인하고 따라가야 할것 같아... 일단 유보.
+	
+		현재 커널에는 터치관련 디바이스 패치가 없다.
+		넥서스에 적용된 herring 커널은 터치를 외부 디바이스를 gpio 로 연결해서 사용하기 때문이다.
+		cypress-touchkey 를 사용하고 firmware  를 다운로드해서 사용하고 있다.!!!
+		해당 자료는 안드로이드 빌드시에 포함되어 시스템에 들어가도록 되어 있다.
+		해당 터치 드라이버는 eabi/staff/r2adve/P11-0125_EM_S5PV210-bizlink/kernel/linux-2.6.35/drivers/input/touchscreen/ts-s3c.c 에서 가져왔다.
+	
+	8461 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/dma-ops.c linux-2.6.35/arch/arm/plat-samsung/dma-ops.c
+		pl330 을 지원하기 위한 dma. 무시한다.
+		
+	8603 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/debug-macro.S linux-2.6.35/arch/arm/plat-samsung/include/plat/debug-macro.S
+		아래와 같이 적용한다.
+			arch/arm/plat-samsung/include/plat/debug-macro.S
+				14 #if CONFIG_MACH_EZS5PV210                                                                                         
+				15     .macro  senduart,rd,rx                                                                                        
+				16         strb    \rd, [\rx, # S3C2410_UTXH ]                                                                       
+				17     .endm                                                                                                         
+				18                                                                                                                   
+				19     .macro  busyuart, rd, rx                                                                                      
+				20 1001:                                                                                                             
+				21         @ busy waiting for non fifo                                                                               
+				22         ldr \rd, [ \rx, # S3C2410_UTRSTAT ]                                                                       
+				23         tst \rd, #S3C2410_UTRSTAT_TXFE                                                                            
+				24         beq 1001b                                                                                                 
+				25     .endm                                                                                                         
+				26                                                                                                                   
+				27     .macro  waituart,rd,rx                                                                                        
+				28 1001:                                                                                                             
+				29         @ idle waiting for non fifo                                                                               
+				30         ldr \rd, [ \rx, # S3C2410_UTRSTAT ]                                                                       
+				31         tst \rd, #S3C2410_UTRSTAT_TXFE                                                                            
+				32         beq 1001b                                                                                                 
+				33     .endm                                                                                                         
+				34 #else  
+
+				108 1002:       @ exit busyuart
+				109     .endm
+				110 #endif // CONFIG_MACH_EZS5PV210
+
+	8650 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/dma-ops.h linux-2.6.35/arch/arm/plat-samsung/include/plat/dma-ops.h
+	8717 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/dma-pl330.h linux-2.6.35/arch/arm/plat-samsung/include/plat/dma-pl330.h
+	8833 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/dma.h linux-2.6.35/arch/arm/plat-samsung/include/plat/dma.h
+		PL330 관련 DMA 부분은 적용하지 않는다.
+		
+	8841 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/fb.h linux-2.6.35/arch/arm/plat-samsung/include/plat/fb.h
+		프레임버퍼 관련 헤더 파일을 수정한다.
+				60 struct s3c_fb_platdata {
+				61     void    (*setup_gpio)(void);
+				62     int (*enable_clk)(struct platform_device *pdev,
+				63                   struct clk **s3cfb_clk);
+				64 
+				65     struct s3c_fb_pd_win    *win[S3C_FB_MAX_WIN];
+				66 
+				67     u32          default_win;
+				68 
+				69     u32          vidcon0;
+				70     u32          vidcon1;
+				71 };
+	
+				79 #ifdef CONFIG_ARCH_FALINUX
+				80 extern void s3c_fb_set_platdata(struct s3c_fb_platdata *pd, int num_platdata);
+				81 #else
+				82 extern void s3c_fb_set_platdata(struct s3c_fb_platdata *pd);
+				83 #endif
+				84 extern void s5pv310_fb0_set_platdata(struct s3c_fb_platdata *pd);
+
+				100 /**
+				101  * s5pv210_fb_gpio_setup_24bpp() - S5PV210/S5PC110 setup function for 24bpp LCD
+				102  *
+				103  * Initialise the GPIO for an 24bpp LCD display on the RGB interface.
+				104  */
+				105 extern void s5pv210_fb_gpio_setup_24bpp(void);
+				106 
+				107 /**
+				108  * s5pv310_fb_gpio_setup_24bpp() - S5PV310/S5PC210 setup function for 24bpp LCD0
+				109  *
+				110  * Initialise the GPIO for an 24bpp LCD display on the RGB interface 0.
+				111  */
+				112 extern void s5pv310_fb0_gpio_setup_24bpp(void);
+				113 
+				114 
+				115 /**
+				116  * s5pv310_fb0_enable_clk() - S5PV310/S5PC210 setup function for enable clock
+				117  */
+				118 extern int s5pv310_fb0_enable_clk(struct platform_device *pdev, struct clk **s3cfb_clk);
+				119 
+
+
+	8914 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/nand.h
+		낸드 관련 헤더 파일 수정한다.
+				67 extern void s3c_nand_set_platdata(struct s3c2410_platform_nand *nand);
+				68 
+				69 /* for s3c_nand.c */
+				70 struct s3c_nand_mtd_info {
+				71    uint chip_nr;
+				72    uint mtd_part_nr;
+				73    struct mtd_partition *partition;
+				74 };
+
+	8928 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/regs-fb-v4.h 
+		프레임 버퍼 관련 패치 수정한다.
+		
+	9026 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/regs-fb.h
+		아래 항목들 수정
+				82 #define VIDCON0_ENVID_F             (1 << 0)
+				83 
+				84 #define VIDCON0_VIDOUT_WB_RGB      (4 << 26)
+				85 
+				86 #define VIDCON1                 (0x04)
+
+				115 #define VIDCON2_YUVORDCrCb          (1 << 7)
+				116 
+				117 #define VIDCON2_WB_DISABLE         (0 << 15)
+				118 #define VIDCON2_WB_ENABLE          (1 << 15)
+				119 #define VIDCON2_WB_MASK            (1 << 15)
+				120 #define VIDCON2_TVFORMATSEL_MASK       (1 << 14)
+				121 
+				122 /* PRTCON (S3C6410, S5PC100)
+				123  * Might not be present in the S3C6410 documentation,
+				124  * but tests prove it's there almost for sure; shouldn't hurt in any case.
+				125  */
+				126 #define PRTCON                 (0x0c)  
+				127 #define PRTCON_PROTECT             (1 << 11)
+				128 
+				129 /* VIDTCON0 */
+
+				189 #define WINCONx_HAWSWP              (1 << 16)
+				190 #define WINCONx_WSWP               (1 << 15)
+				191 #define WINCONx_BURSTLEN_MASK           (0x3 << 9)
+
+				209 #define WINCON1_BLD_PIX             (1 << 6)
+				210 #define WINCON1_BLD_PLANE          (0 << 6)
+				211 
+				212 #define WINCON1_ALPHA_SEL           (1 << 1)
+
+				229 #define WINCON1_BPPMODE_28BPP_A4888     (0xd << 2)
+				230 
+				231 /* S5PV210 */
+				232 #define SHADOWCON              (0x34)  
+				233 #define SHADOWCON_WINx_PROTECT(_win)       (1 << (10 + (_win)))
+				234 /* DMA channels (all windows) */
+				235 #define SHADOWCON_CHx_ENABLE(_win)     (1 << (_win)) 
+				236 /* Local input channels (windows 0-2) */
+				237 #define SHADOWCON_CHx_LOCAL_ENABLE(_win)   (1 << (5 + (_win)))
+				238 
+				239 #define VIDOSDxA_TOPLEFT_X_MASK         (0x7ff << 11)
+
+				315 #define VIDINTCON0_FRAMESEL0_FRONTPORCH     (0x3 << 15)
+				316 
+				317 #define VIDINTCON0_FRAMESEL1            (1 << 13)
+				318 #define VIDINTCON0_FRAMESEL1_NONE       (0x0 << 13)
+				319 #define VIDINTCON0_FRAMESEL1_BACKPORCH      (0x1 << 13)
+				320 #define VIDINTCON0_FRAMESEL1_VSYNC      (0x2 << 13)
+				321 #define VIDINTCON0_FRAMESEL1_FRONTPORCH     (0x3 << 13)
+				322 
+				323 #define VIDINTCON0_INT_FRAME            (1 << 12)
+
+				346 /* Window colour-key control registers */
+				347 
+				348 #define WKEYCON                    (0x140) /* 6410,V210 */
+				349 
+				350 #define WKEYCON0               (0x00)  
+				351 #define WKEYCON1               (0x04)  
+				352 
+				353 #define WxKEYCON0_KEYBL_EN          (1 << 26)
+
+	9116 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/regs-nand.h
+		낸드 관련 패치 적용한다.
+
+	9209 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/regs-oldstyle-gpio.h
+		해당 파일은 현재 패치에 없으므로 복사하여 사용한다.
+		
+	10676 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/s3c-dma-pl330.h
+		라인 넘버 추가로 내용변화없어 적용안함
+		
+	10730 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/s3c-pl330-pdata.h
+		파일 삭제 패치이나 dma 관련 패치로 적용하지 않음
+		
+	10766 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/include/plat/uncompress.h
+		uncompress 메세지 관련 패치로 보이나... s5pv210 에서는 압축이미지를 사용하지 않는다....;;  따라서 해당 패치는 적용하지 않는다
+		
+	10911 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/s3c-dma-ops.c
+	11049 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/plat-samsung/s3c-pl330.c
+		dma 관련 패치는 적용하지 않는다.
+		
+	12289 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/arch/arm/tools/mach-types
+		머신 타입을 추가해준다.
+		
+	12299 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/amba/bus.c
+		빈라인 추가는 적용하지 않는다.
+		
+	12310 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/char/vt.c 
+		블랭크 인터벌을 0 으로 바꾸어준다.
+		
+	12322 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/dma/Kconfig
+	12335 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/dma/pl330.c
+		dma 관련 패치는 적용하지 않는다.
+		
+	12737 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/keyboard/Kconfig
+		패치해준다.
+		
+	12752 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/keyboard/Makefile
+		패치해준다.
+
+	12761 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/keyboard/falinux_gpio_key.c
+		전체를 복사한다.
+	
+	13153 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/touchscreen/Kconfig
+	13188 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/touchscreen/Makefile
+		터치 관련 패치를 적용한다
+		
+	13196 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/input/touchscreen/ts-s3c.c
+		추가로 수정한 부분이 적용이 되어 있지 않다.
+		부팅후 추가로 터치 부분을 패치 해줄것...
+
+    13810 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/misc/Kconfig
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	13889 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/misc/Makefile 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+		
+	13915 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/misc/pmem.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	13928 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/misc/uid_stat.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	14088 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mmc/host/s3cmci.c
+		mmc와 관련하여 공용체( s3c2410_dmasrc -> dma_data_direction )를 수정 하였으며, 이와 관련된 선언 부분 패치.
+		또한, 정의문인 S3C2410_DMASRC_MEM, S3C2410_DMASRC_HW 디파인 문을 
+		                    DMA_TO_DEVICE, DMA_FROM_DEVICE  로 디파인문 변경
+
+	14116 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mmc/host/sdhci.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	14149 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mtd/nand/Kconfig 
+		패치해준다.
+	
+	14197 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mtd/nand/Makefile
+		패치해준다.
+
+	14208 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mtd/nand/nand_base.c 
+		패치해준다.
+
+	14260 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mtd/nand/s3c_nand-falinux.c 
+		전체를 복사한다.
+
+	15790 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/mtd/nand/s3c_nand.c
+		전체를 복사한다.
+
+	17174 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/net/Kconfig
+		패치해준다.
+		
+	17193 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/net/Makefile
+		패치해준다.
+
+	17204 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/net/ax88796b.c
+		전체를 복사한다.
+
+	19452 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/net/ax88796b.h
+		전체를 복사한다.
+	
+	19739 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/net/wireless/Kconfig 
+		패치해준다.
+
+	19754 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/rtc/hctosys.c 
+		같은 내용을 주석 처리후 2라인짜리 구문을 1라인으로 만드는 패치 이므로 패치를 적용하지 않는다.
+		
+	19768 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/rtc/rtc-ds1307.c
+		빈라인 삭제는 적용하지 않는다.
+
+	19779 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/serial/8250.c
+		패치해준다.
+
+	19848 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/Kconfig
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	19860 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/Kconfig
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	19959 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/Makefile
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+	
+	19969 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/binder.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	23573 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/binder.h 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	23907 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/logger.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	24527 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/logger.h
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	24580 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/lowmemorykiller.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	24792 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/ram_console.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+ 	25214 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/timed_gpio.c
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	25394 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/timed_gpio.h 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	25431 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/timed_output.c 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	25558 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/staging/android/timed_output.h
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	25599 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/Kconfig
+		패치해준다.
+
+	25622 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/Makefile
+		패치해준다.
+
+	25631 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/ohci-s3c2410.c 
+		패치해준다.
+
+	25733 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/Makefile
+		이전에 drivers/usb/host/s3c-otg 디렉토리를 생성 한다.
+		전체를 복사한다.
+
+	25755 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-common-common.h 
+		전체를 복사한다.
+
+	25810 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-common-const.h
+		전체를 복사한다.
+
+	25981 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-common-datastruct.h
+		전체를 복사한다.
+
+	26855 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-common-errorcode.h 
+		전체를 복사한다.
+
+	26973 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-common-regdef.h
+		전체를 복사한다.
+
+	27294 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-debug.h
+		전체를 복사한다.
+
+	27389 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-driver.c
+		전체를 복사한다.
+
+	27646 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-driver.h
+		전체를 복사한다.
+
+	27723 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-hcd.c
+		전체를 복사한다.
+
+	28385 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-hcd.h
+		전체를 복사한다.
+
+	28533 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-kal.h
+		전체를 복사한다.
+
+	28950 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-list.h
+		전체를 복사한다.
+
+	29179 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-hcdi-memory.h
+		전체를 복사한다.
+
+	29363 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-isr.c 
+		전체를 복사한다.
+
+	29662 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-isr.h 
+		전체를 복사한다.
+
+	29738 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-oci.c 
+		전체를 복사한다.
+
+	30562 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-oci.h
+		전체를 복사한다.
+
+	30650 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-roothub.c
+		전체를 복사한다.
+
+	31135 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-roothub.h
+		전체를 복사한다.
+
+	31223 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-scheduler-ischeduler.c
+		전체를 복사한다.
+
+	31622 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-scheduler-readyq.c
+		전체를 복사한다.
+
+	31879 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-scheduler-scheduler.c
+		전체를 복사한다.
+
+	32332 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-scheduler-scheduler.h 
+		전체를 복사한다.
+
+	32438 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transfer-common.c
+		전체를 복사한다.
+
+	33283 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transfer-nonperiodic.c 
+		전체를 복사한다.
+
+	33434 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transfer-periodic.c 
+		전체를 복사한다.
+
+	33569 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transfer-transfer.h 
+		전체를 복사한다.
+
+	33720 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-bulk.c
+		전체를 복사한다.
+
+	34397 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-bulk.h
+		전체를 복사한다.
+
+	34489 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-checker.h
+		전체를 복사한다.
+
+	34559 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-common.c
+		전체를 복사한다.
+
+	34822 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-common.h
+		전체를 복사한다.
+
+	34905 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-control.c
+		전체를 복사한다.
+
+	35626 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-control.h
+		전체를 복사한다.
+
+	35730 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-interrupt.c
+		전체를 복사한다.
+
+	36316 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/usb/host/s3c-otg/s3c-otg-transferchecker-interrupt.h
+		전체를 복사한다.
+
+	36417 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/Kconfig
+	    패치를 적용한다.
+
+	36647 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/Makefile 
+	    패치를 적용한다.
+
+	36689 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/console/Kconfig
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	36701 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/Kconfig
+	    패치를 적용한다.
+
+	36727 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/Makefile 
+	    패치를 적용한다.
+
+	36741 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/logo.c
+	    패치를 적용한다.
+
+	36802 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/logo_falinux_480x272_clut224.ppm 
+		전체를 복사한다.
+	
+	58569 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/logo_falinux_640x480_clut224.ppm 
+		전체를 복사한다.
+
+	109936 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/logo_falinux_800x480_clut224.ppm 
+		전체를 복사한다.
+
+	174263 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/logo/logo_falinux_clut224.ppm 
+		전체를 복사한다.
+
+	196030 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/s3c-fb.c 
+	    패치를 적용한다. 
+
+	197287 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/Kconfig
+	197419 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/Makefile 
+	197465 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/logo_rgb24.h ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+	221473 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb.c ( 현재 herring(nexus s)에는 파일 있으나, 기 작업되어있는 fa kernel에는 파일이 없음 ) 
+	223180 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb.h
+	223561 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2.c ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+	224797 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2.h ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+	225100 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2_fimd4x.c ( 현재 herring(nexus s)에는 파일 있으나, 기 작업되어있는 fa kernel에는 파일이 없음 ) 
+	225662 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2_fimd5x.c
+	226228 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2_fimd6x.c
+	226794 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2_lte480wv.c
+	226844 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb2_tl2796.c
+	226894 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_ams369fg06.c
+	227348 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_fimd6x.c
+	227467 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_lms700.cN
+	227516 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_lte480wv.c
+	227548 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_main.c ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+	228017 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_ops.c ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+	229145 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_tl2796.c  ( 현재 herring(nexus s)에는 파일 있으나, 기 작업되어있는 fa kernel에는 파일이 없음 ) 
+	229605 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/drivers/video/samsung/s3cfb_wa101s.c ( 현재 herring(nexus s)에는 파일 없으나, 기 작업되어있는 fa kernel에는 파일이 있음 )
+		video / samsung 과 관련된 상기 파일들은 패치를 적용하지 않고, herring kernel에 있는 원본 상태 그대로 이용한다.
+
+	229687 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/include/linux/amba/pl330.h
+	229704 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/include/linux/dmaengine.h
+		dma 관련 패치는 적용하지 않는다.
+
+	229870 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/include/linux/uid_stat.h 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+
+	229903 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/include/mtd/mtd-abi.h
+		패치 적용
+
+	229915 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/include/net/activity_stats.h 
+		이 파일에는 이미 패치가 적용이 되어 있다.
+		패치를 적용하지 않는다.
+		
+	229944 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/init/main.c 
+		패치 적용
+
+	230032 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/codecs/Kconfig
+		패치 적용
+
+	230053 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/codecs/Makefile
+		패치 적용
+
+	230072 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/codecs/wm9715.c
+		파일 복사, 패치 적용
+
+	231305 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/codecs/wm9715.h
+		파일 복사, 패치 적용
+
+	231370 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/Kconfig
+		패치 적용
+
+	231395 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/Makefile 
+		패치 적용
+		
+	231414 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/ezbd_wm9715.c
+		파일복사, 패치 적용
+
+	231519 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/s3c-ac97.c
+		패치 적용
+
+	231566 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/s3c-dma.c
+		패치 적용
+
+	231950 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/s3c-dma.h
+		패치 적용
+
+	231964 diff -urN linux-2.6-samsung-2.6.35-samsung-73a7976/sound/soc/s3c24xx/smdk_wm9713.c
+		패치 적용
+
+
+	빌드시 에러 발생 하여 추가 작업
+
+
+ ./arch/arm/mach-s5pv210/clock.c
+
+	s5pv210_device_nand 펑션을 찿을 수 없다는 에러가 발생하여 다음과 같이 주석 처리함.
+------------------------------------------------------------
+		 381 #if 0
+		 382     }, {
+		 383         .name       = "nand",
+		 384         .id     = -1,
+		 385         .parent     = &clk_hclk_psys.clk,
+		 386         .enable     = s5pv210_clk_ip1_ctrl,
+		 387         .ctrlbit    = ((1 << 28) | (1 << 24)),
+		 388         .dev        = &s5pv210_device_nand,
+		 389 #endif
+------------------------------------------------------------
+
+arch/arm/mach-s5pv210/mach-ezs5pv210.c 컴파일시 아래와 같은 에러가 발생하였음.
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/mach-ezs5pv210.c:35: fatal error: mach/ts-s3c.h: No such file or directory
+
+위의 에러를 해결 하기 위해 다음과 같은 파일 새로 생성함.
+
+   ./arch/arm/mach-s5pv210/include/mach/ts-s3c.h 파일 새로 생성
+------------------------------------------------------------
+		# cat ./arch/arm/mach-s5pv210/include/mach/ts-s3c.h
+		/* arch/arm/plat-samsung/include/plat/ts.h
+		 *
+		 * Copyright (c) 2005 Arnaud Patard <arnaud.patard@rtp-net.org>
+		 *
+		 * This program is free software; you can redistribute it and/or modify
+		 * it under the terms of the GNU General Public License version 2 as
+		 * published by the Free Software Foundation.
+		*/
+
+		#ifndef __MACH_TS_SMDKC110_H
+		#define __MACH_TS_SMDKC110_H
+
+		#ifdef CONFIG_HAS_WAKELOCK
+		#include <linux/wakelock.h>
+		#include <linux/earlysuspend.h>
+		#endif
+
+		enum s3c_adc_type {
+			ADC_TYPE_0,
+			ADC_TYPE_1, /* S3C2416, S3C2450 */
+			ADC_TYPE_2, /* S3C64XX, S5PC1XX */
+		};
+
+		struct s3c_ts_mach_info {
+			int                 delay;
+			int                 presc;
+			int                 oversampling_shift;
+			int         resol_bit;
+			enum s3c_adc_type   s3c_adc_con;
+		};
+
+		struct s3c_ts_info {
+			struct input_dev    *dev;
+			long            xp;
+			long            yp;
+			int             count;
+			int             shift;
+			char            phys[32];
+			int         resol_bit;
+			enum s3c_adc_type   s3c_adc_con;
+
+		#ifdef CONFIG_HAS_WAKELOCK
+				struct early_suspend early_suspend;
+		#endif
+		};
+		#endif /* __ASM_ARM_TS_H */
+------------------------------------------------------------
+
+arch/arm/mach-s5pv210/mach-ezs5pv210.c 컴파일시 아래와 같은 에러가 발생하였음.
+arch/arm/mach-s5pv210/mach-ezs5pv210.c:454: error: 's5p_device_mfc' undeclared here (not in a function)
+arch/arm/mach-s5pv210/mach-ezs5pv210.c: In function 'ezs5pv210_eint_set':
+
+arch/arm/mach-s5pv210/mach-ezs5pv210.c 파일 자체를 ./arch/arm/mach-s5pv210/mach-herring.c 파일을 기반으로 하여 재작업 시도
+------------------------------------------------------------
+
+/* linux/arch/arm/mach-s5pv210/mach-ezs5pv210.c
+ *
+ * Copyright (c) 2010 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com/
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+#include <linux/kernel.h>
+#include <linux/types.h>
+#include <linux/init.h>
+#include <linux/serial_core.h>
+#include <linux/gpio.h>
+#include <linux/gpio_event.h>
+#include <linux/videodev2.h>
+#include <linux/i2c.h>
+#include <linux/i2c-gpio.h>
+#include <linux/regulator/consumer.h>
+#include <linux/mfd/max8998.h>
+#include <linux/i2c/ak8973.h>
+#include <linux/clk.h>
+#include <linux/delay.h>
+#include <linux/usb/ch9.h>
+#include <linux/spi/spi.h>
+#include <linux/spi/spi_gpio.h>
+#include <linux/clk.h>
+#include <linux/usb/ch9.h>
+#include <linux/input/cypress-touchkey.h>
+#include <linux/input.h>
+#include <linux/irq.h>
+#include <linux/skbuff.h>
+#include <linux/console.h>
+
+#include <asm/mach/arch.h>
+#include <asm/mach/map.h>
+#include <asm/setup.h>
+#include <asm/mach-types.h>
+#include <asm/system.h>
+
+#include <mach/map.h>
+#include <mach/regs-clock.h>
+#include <mach/gpio.h>
+#include <mach/gpio-herring.h>
+#include <mach/adc.h>
+#include <mach/param.h>
+#include <mach/system.h>
+
+#include <linux/usb/gadget.h>
+#include <linux/fsa9480.h>
+#include <linux/pn544.h>
+#include <linux/notifier.h>
+#include <linux/reboot.h>
+#include <linux/wlan_plat.h>
+#include <linux/mfd/wm8994/wm8994_pdata.h>
+
+#ifdef CONFIG_ANDROID_PMEM
+#include <linux/android_pmem.h>
+#include <plat/media.h>
+#include <mach/media.h>
+#endif
+
+#ifdef CONFIG_S5PV210_POWER_DOMAIN
+#include <mach/power-domain.h>
+#endif
+#include <mach/cpu-freq-v210.h>
+
+// [FALinux] modified....
+#include <media/s5ka3dfx_platform.h>
+#include <media/s5k4ecgx.h>
+// [FALinux] modified....
+
+#include <plat/regs-serial.h>
+#include <plat/s5pv210.h>
+#include <plat/devs.h>
+#include <plat/cpu.h>
+#include <plat/fb.h>
+#include <plat/mfc.h>
+#include <plat/iic.h>
+#include <plat/pm.h>
+
+#include <plat/sdhci.h>
+#include <plat/fimc.h>
+#include <plat/jpeg.h>
+#include <plat/clock.h>
+#include <plat/regs-otg.h>
+#include <linux/gp2a.h>
+// #include <linux/kr3dm.h>
+// #include <linux/input/k3g.h>
+
+#include <../../../drivers/video/samsung/s3cfb.h>
+
+// #include <linux/sec_jack.h>
+// #include <linux/input/mxt224.h>
+// #include <linux/max17040_battery.h>
+// #include <linux/mfd/max8998.h>
+// #include <linux/regulator/max8893.h>
+// #include <linux/wimax/samsung/wimax732.h>
+// #include <linux/switch.h>
+// 
+// #include "herring.h"
+
+struct class *sec_class;
+EXPORT_SYMBOL(sec_class);
+
+struct device *switch_dev;
+EXPORT_SYMBOL(switch_dev);
+
+void (*sec_set_param_value)(int idx, void *value);
+EXPORT_SYMBOL(sec_set_param_value);
+
+void (*sec_get_param_value)(int idx, void *value);
+EXPORT_SYMBOL(sec_get_param_value);
+
+/* Following are default values for UCON, ULCON and UFCON UART registers */
+#define S5PV210_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
+				 S3C2410_UCON_RXILEVEL |	\
+				 S3C2410_UCON_TXIRQMODE |	\
+				 S3C2410_UCON_RXIRQMODE |	\
+				 S3C2410_UCON_RXFIFO_TOI |	\
+				 S3C2443_UCON_RXERR_IRQEN)
+
+#define S5PV210_ULCON_DEFAULT	S3C2410_LCON_CS8
+
+#define S5PV210_UFCON_DEFAULT	(S3C2410_UFCON_FIFOMODE |	\
+				 S5PV210_UFCON_TXTRIG4 |	\
+				 S5PV210_UFCON_RXTRIG4)
+
+static struct s3c2410_uartcfg herring_uartcfgs[] __initdata = {
+	{
+		.hwport		= 0,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+//		.wake_peer	= herring_bt_uart_wake_peer,
+	},
+	{
+		.hwport		= 1,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+#ifndef CONFIG_FIQ_DEBUGGER
+	{
+		.hwport		= 2,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+#endif
+	{
+		.hwport		= 3,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+};
+
+static struct s3c2410_uartcfg ezs5pv210_uartcfgs[] __initdata = {
+	[0] = {
+		.hwport		= 0,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+	[1] = {
+		.hwport		= 1,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+	[2] = {
+		.hwport		= 2,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+	[3] = {
+		.hwport		= 3,
+		.flags		= 0,
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ulcon		= S5PV210_ULCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+	},
+};
+
+
+#define S5PV210_LCD_WIDTH 480
+#define S5PV210_LCD_HEIGHT 800
+
+static struct s3cfb_lcd s6e63m0 = {
+	.width = S5PV210_LCD_WIDTH,
+	.height = S5PV210_LCD_HEIGHT,
+	.p_width = 52,
+	.p_height = 86,
+	.bpp = 24,
+	.freq = 60,
+
+	.timing = {
+		.h_fp = 16,
+		.h_bp = 16,
+		.h_sw = 2,
+		.v_fp = 28,
+		.v_fpe = 1,
+		.v_bp = 1,
+		.v_bpe = 1,
+		.v_sw = 2,
+	},
+	.polarity = {
+		.rise_vclk = 1,
+		.inv_hsync = 1,
+		.inv_vsync = 1,
+		.inv_vden = 1,
+	},
+};
+
+static struct s3cfb_lcd nt35580 = {
+	.width = 480,
+	.height = 800,
+	.p_width = 52,
+	.p_height = 86,
+	.bpp = 24,
+	.freq = 60,
+	.timing = {
+		.h_fp = 10,
+		.h_bp = 20,
+		.h_sw = 10,
+		.v_fp = 6,
+		.v_fpe = 1,
+		.v_bp = 8,
+		.v_bpe = 1,
+		.v_sw = 2,
+	},
+	.polarity = {
+		.rise_vclk = 1,
+		.inv_hsync = 1,
+		.inv_vsync = 1,
+		.inv_vden = 1,
+	},
+};
+
+static struct s3cfb_lcd r61408 = {
+	.width = 480,
+	.height = 800,
+	.p_width = 52,
+	.p_height = 86,
+	.bpp = 24,
+	.freq = 60,
+	.timing = {
+		.h_fp = 100,
+		.h_bp = 2,
+		.h_sw = 2,
+		.v_fp = 8,
+		.v_fpe = 1,
+		.v_bp = 10,
+		.v_bpe = 1,
+		.v_sw = 2,
+	},
+	.polarity = {
+		.rise_vclk = 1,
+		.inv_hsync = 1,
+		.inv_vsync = 1,
+		.inv_vden = 0,
+	},
+};
+
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0 (6144 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC1 (9900 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2 (6144 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0 (36864 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1 (36864 * SZ_1K)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD (S5PV210_LCD_WIDTH * \
+					     S5PV210_LCD_HEIGHT * 4 * \
+					     CONFIG_FB_S3C_NR_BUFFERS)
+#define  S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG (8192 * SZ_1K)
+
+static struct s5p_media_device herring_media_devs[] = {
+	[0] = {
+		.id = S5P_MDEV_MFC,
+		.name = "mfc",
+		.bank = 0,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC0,
+		.paddr = 0,
+	},
+	[1] = {
+		.id = S5P_MDEV_MFC,
+		.name = "mfc",
+		.bank = 1,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_MFC1,
+		.paddr = 0,
+	},
+	[2] = {
+		.id = S5P_MDEV_FIMC0,
+		.name = "fimc0",
+		.bank = 1,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC0,
+		.paddr = 0,
+	},
+	[3] = {
+		.id = S5P_MDEV_FIMC1,
+		.name = "fimc1",
+		.bank = 1,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC1,
+		.paddr = 0,
+	},
+	[4] = {
+		.id = S5P_MDEV_FIMC2,
+		.name = "fimc2",
+		.bank = 1,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMC2,
+		.paddr = 0,
+	},
+	[5] = {
+		.id = S5P_MDEV_JPEG,
+		.name = "jpeg",
+		.bank = 0,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_JPEG,
+		.paddr = 0,
+	},
+	[6] = {
+		.id = S5P_MDEV_FIMD,
+		.name = "fimd",
+		.bank = 1,
+		.memsize = S5PV210_VIDEO_SAMSUNG_MEMSIZE_FIMD,
+		.paddr = 0,
+	},
+};
+
+#ifdef CONFIG_CPU_FREQ
+static struct s5pv210_cpufreq_voltage smdkc110_cpufreq_volt[] = {
+	{
+		.freq	= 1000000,
+		.varm	= 1275000,
+		.vint	= 1100000,
+	}, {
+		.freq	=  800000,
+		.varm	= 1200000,
+		.vint	= 1100000,
+	}, {
+		.freq	=  400000,
+		.varm	= 1050000,
+		.vint	= 1100000,
+	}, {
+		.freq	=  200000,
+		.varm	=  950000,
+		.vint	= 1100000,
+	}, {
+		.freq	=  100000,
+		.varm	=  950000,
+		.vint	= 1000000,
+	},
+};
+
+static struct s5pv210_cpufreq_data smdkc110_cpufreq_plat = {
+	.volt	= smdkc110_cpufreq_volt,
+	.size	= ARRAY_SIZE(smdkc110_cpufreq_volt),
+};
+#endif
+
+static struct regulator_consumer_supply ldo3_consumer[] = {
+	REGULATOR_SUPPLY("pd_io", "s3c-usbgadget")
+};
+
+static struct regulator_consumer_supply ldo7_consumer[] = {
+	{	.supply	= "vlcd", },
+};
+
+static struct regulator_consumer_supply ldo8_consumer[] = {
+	REGULATOR_SUPPLY("pd_core", "s3c-usbgadget")
+};
+
+static struct regulator_consumer_supply ldo11_consumer[] = {
+	{	.supply	= "cam_af", },
+};
+
+static struct regulator_consumer_supply ldo12_consumer[] = {
+	{	.supply	= "cam_sensor", },
+};
+
+static struct regulator_consumer_supply ldo13_consumer[] = {
+	{	.supply	= "vga_vddio", },
+};
+
+static struct regulator_consumer_supply ldo14_consumer[] = {
+	{	.supply	= "vga_dvdd", },
+};
+
+static struct regulator_consumer_supply ldo15_consumer[] = {
+	{	.supply	= "cam_isp_host", },
+};
+
+static struct regulator_consumer_supply ldo16_consumer[] = {
+	{	.supply	= "vga_avdd", },
+};
+
+static struct regulator_consumer_supply ldo17_consumer[] = {
+	{	.supply	= "vcc_lcd", },
+};
+
+static struct regulator_consumer_supply buck1_consumer[] = {
+	{	.supply	= "vddarm", },
+};
+
+static struct regulator_consumer_supply buck2_consumer[] = {
+	{	.supply	= "vddint", },
+};
+
+static struct regulator_consumer_supply buck4_consumer[] = {
+	{	.supply	= "cam_isp_core", },
+};
+
+static unsigned int lcd_type;
+module_param_named(lcd_type, lcd_type, uint, 0444);
+MODULE_PARM_DESC(lcd_type, "LCD type: default= sony, 1= hydis, 2= hitachi");
+
+static void panel_cfg_gpio(struct platform_device *pdev)
+{
+	int i;
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF0(i), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(S5PV210_GPF0(i), S3C_GPIO_PULL_NONE);
+	}
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF1(i), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(S5PV210_GPF1(i), S3C_GPIO_PULL_NONE);
+	}
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF2(i), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(S5PV210_GPF2(i), S3C_GPIO_PULL_NONE);
+	}
+
+	for (i = 0; i < 4; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF3(i), S3C_GPIO_SFN(2));
+		s3c_gpio_setpull(S5PV210_GPF3(i), S3C_GPIO_PULL_NONE);
+	}
+
+	/* mDNIe SEL: why we shall write 0x2 ? */
+#ifdef CONFIG_FB_S3C_MDNIE
+	writel(0x1, S5P_MDNIE_SEL);
+#else
+	writel(0x2, S5P_MDNIE_SEL);
+#endif
+
+	/* DISPLAY_CS */
+	s3c_gpio_cfgpin(S5PV210_MP01(1), S3C_GPIO_SFN(1));
+	/* DISPLAY_CLK */
+	s3c_gpio_cfgpin(S5PV210_MP04(1), S3C_GPIO_SFN(1));
+	/* DISPLAY_SO */
+	s3c_gpio_cfgpin(S5PV210_MP04(2), S3C_GPIO_SFN(1));
+	/* DISPLAY_SI */
+	s3c_gpio_cfgpin(S5PV210_MP04(3), S3C_GPIO_SFN(1));
+
+	/* DISPLAY_CS */
+	s3c_gpio_setpull(S5PV210_MP01(1), S3C_GPIO_PULL_NONE);
+	/* DISPLAY_CLK */
+	s3c_gpio_setpull(S5PV210_MP04(1), S3C_GPIO_PULL_NONE);
+	/* DISPLAY_SO */
+	s3c_gpio_setpull(S5PV210_MP04(2), S3C_GPIO_PULL_NONE);
+	/* DISPLAY_SI */
+	s3c_gpio_setpull(S5PV210_MP04(3), S3C_GPIO_PULL_NONE);
+
+}
+
+void lcd_cfg_gpio_early_suspend(void)
+{
+	int i;
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF0(i), S3C_GPIO_OUTPUT);
+		s3c_gpio_setpull(S5PV210_GPF0(i), S3C_GPIO_PULL_NONE);
+		gpio_set_value(S5PV210_GPF0(i), 0);
+	}
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF1(i), S3C_GPIO_OUTPUT);
+		s3c_gpio_setpull(S5PV210_GPF1(i), S3C_GPIO_PULL_NONE);
+		gpio_set_value(S5PV210_GPF1(i), 0);
+	}
+
+	for (i = 0; i < 8; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF2(i), S3C_GPIO_OUTPUT);
+		s3c_gpio_setpull(S5PV210_GPF2(i), S3C_GPIO_PULL_NONE);
+		gpio_set_value(S5PV210_GPF2(i), 0);
+	}
+
+	for (i = 0; i < 4; i++) {
+		s3c_gpio_cfgpin(S5PV210_GPF3(i), S3C_GPIO_OUTPUT);
+		s3c_gpio_setpull(S5PV210_GPF3(i), S3C_GPIO_PULL_NONE);
+		gpio_set_value(S5PV210_GPF3(i), 0);
+	}
+	/* drive strength to min */
+	writel(0x00000000, S5P_VA_GPIO + 0x12c); /* GPF0DRV */
+	writel(0x00000000, S5P_VA_GPIO + 0x14c); /* GPF1DRV */
+	writel(0x00000000, S5P_VA_GPIO + 0x16c); /* GPF2DRV */
+	writel(0x00000000, S5P_VA_GPIO + 0x18c); /* GPF3DRV */
+
+	/* OLED_DET */
+	s3c_gpio_cfgpin(GPIO_OLED_DET, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_OLED_DET, S3C_GPIO_PULL_NONE);
+	gpio_set_value(GPIO_OLED_DET, 0);
+
+	/* LCD_RST */
+	s3c_gpio_cfgpin(GPIO_MLCD_RST, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_MLCD_RST, S3C_GPIO_PULL_NONE);
+	gpio_set_value(GPIO_MLCD_RST, 0);
+
+	/* DISPLAY_CS */
+	s3c_gpio_cfgpin(GPIO_DISPLAY_CS, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_DISPLAY_CS, S3C_GPIO_PULL_NONE);
+	gpio_set_value(GPIO_DISPLAY_CS, 0);
+
+	/* DISPLAY_CLK */
+	s3c_gpio_cfgpin(GPIO_DISPLAY_CLK, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_DISPLAY_CLK, S3C_GPIO_PULL_NONE);
+	gpio_set_value(GPIO_DISPLAY_CLK, 0);
+
+	/* DISPLAY_SO */
+	/*
+	s3c_gpio_cfgpin(S5PV210_MP04(2), S3C_GPIO_INPUT);
+	s3c_gpio_setpull(S5PV210_MP04(2), S3C_GPIO_PULL_DOWN);
+	*/
+
+	/* DISPLAY_SI */
+	s3c_gpio_cfgpin(GPIO_DISPLAY_SI, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_DISPLAY_SI, S3C_GPIO_PULL_NONE);
+	gpio_set_value(GPIO_DISPLAY_SI, 0);
+
+	/* DIC_ID */
+	s3c_gpio_cfgpin(GPIO_DIC_ID, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_DIC_ID, S3C_GPIO_PULL_DOWN);
+	/* gpio_set_value(GPIO_DIC_ID, 0); */
+}
+EXPORT_SYMBOL(lcd_cfg_gpio_early_suspend);
+
+void lcd_cfg_gpio_late_resume(void)
+{
+	/* OLED_DET */
+	s3c_gpio_cfgpin(GPIO_OLED_DET, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_OLED_DET, S3C_GPIO_PULL_NONE);
+
+	/* DIC_ID */
+	s3c_gpio_cfgpin(GPIO_DIC_ID, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_DIC_ID, S3C_GPIO_PULL_NONE);
+	/* gpio_set_value(GPIO_DIC_ID, 0); */
+}
+EXPORT_SYMBOL(lcd_cfg_gpio_late_resume);
+
+static int panel_reset_lcd(struct platform_device *pdev)
+{
+	int err;
+
+	err = gpio_request(S5PV210_MP05(5), "MLCD_RST");
+	if (err) {
+		printk(KERN_ERR "failed to request MP0(5) for "
+				"lcd reset control\n");
+		return err;
+	}
+
+	gpio_direction_output(S5PV210_MP05(5), 1);
+	msleep(10);
+
+	gpio_set_value(S5PV210_MP05(5), 0);
+	msleep(10);
+
+	gpio_set_value(S5PV210_MP05(5), 1);
+	msleep(10);
+
+	gpio_free(S5PV210_MP05(5));
+
+	return 0;
+}
+
+static int panel_backlight_on(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static struct s3c_platform_fb tl2796_data __initdata = {
+	.hw_ver		= 0x62,
+	.clk_name	= "sclk_fimd",
+	.nr_wins	= 5,
+	.default_win	= CONFIG_FB_S3C_DEFAULT_WINDOW,
+	.swap		= FB_SWAP_HWORD | FB_SWAP_WORD,
+
+	.lcd = &s6e63m0,
+	.cfg_gpio	= panel_cfg_gpio,
+	.backlight_on	= panel_backlight_on,
+	.reset_lcd	= panel_reset_lcd,
+};
+
+static struct s3c_platform_fb nt35580_data __initdata = {
+	.hw_ver		= 0x62,
+	.clk_name	= "sclk_fimd",
+	.nr_wins	= 5,
+	.default_win	= CONFIG_FB_S3C_DEFAULT_WINDOW,
+	.swap		= FB_SWAP_HWORD | FB_SWAP_WORD,
+
+	.lcd			= &nt35580,
+	.cfg_gpio	= panel_cfg_gpio,
+	.backlight_on	= panel_backlight_on,
+	.reset_lcd	= panel_reset_lcd,
+};
+
+static struct s3c_platform_fb r61408_data __initdata = {
+	.hw_ver		= 0x62,
+	.clk_name	= "sclk_fimd",
+	.nr_wins	= 5,
+	.default_win	= CONFIG_FB_S3C_DEFAULT_WINDOW,
+	.swap		= FB_SWAP_HWORD | FB_SWAP_WORD,
+
+	.lcd			= &r61408,
+	.cfg_gpio	= panel_cfg_gpio,
+	.backlight_on	= panel_backlight_on,
+	.reset_lcd	= panel_reset_lcd,
+};
+
+#define LCD_BUS_NUM     3
+#define DISPLAY_CS      S5PV210_MP01(1)
+#define SUB_DISPLAY_CS  S5PV210_MP01(2)
+#define DISPLAY_CLK     S5PV210_MP04(1)
+#define DISPLAY_SI      S5PV210_MP04(3)
+
+static void touch_keypad_gpio_init(void)
+{
+	int ret = 0;
+
+	ret = gpio_request(_3_GPIO_TOUCH_EN, "TOUCH_EN");
+	if (ret)
+		printk(KERN_ERR "Failed to request gpio touch_en.\n");
+}
+
+static void touch_keypad_onoff(int onoff)
+{
+	gpio_direction_output(_3_GPIO_TOUCH_EN, onoff);
+
+	if (onoff == TOUCHKEY_OFF)
+		msleep(30);
+	else
+		msleep(50);
+}
+
+static void touch_keypad_gpio_sleep(int onoff) {
+    if (onoff == TOUCHKEY_ON)
+        s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT1);
+    else
+        s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT0);
+}
+
+static const int touch_keypad_code[] = {
+	KEY_MENU,
+	KEY_HOME,
+	KEY_BACK,
+	KEY_SEARCH
+};
+
+static struct touchkey_platform_data touchkey_data = {
+	.keycode_cnt = ARRAY_SIZE(touch_keypad_code),
+	.keycode = touch_keypad_code,
+	.touchkey_onoff = touch_keypad_onoff,
+    .touchkey_sleep_onoff = touch_keypad_gpio_sleep,
+	.fw_name = "cypress-touchkey.bin",
+	.scl_pin = _3_TOUCH_SCL_28V,
+	.sda_pin = _3_TOUCH_SDA_28V,
+	.en_pin = _3_GPIO_TOUCH_EN,
+};
+
+static struct gpio_event_direct_entry herring_keypad_key_map[] = {
+	{
+		.gpio	= S5PV210_GPH2(6),
+		.code	= KEY_POWER,
+	},
+	{
+		.gpio	= S5PV210_GPH3(1),
+		.code	= KEY_VOLUMEDOWN,
+	},
+	{
+		.gpio	= S5PV210_GPH3(2),
+		.code	= KEY_VOLUMEUP,
+	}
+};
+
+static struct gpio_event_input_info herring_keypad_key_info = {
+	.info.func = gpio_event_input_func,
+	.info.no_suspend = true,
+	.debounce_time.tv.nsec = 5 * NSEC_PER_MSEC,
+	.type = EV_KEY,
+	.keymap = herring_keypad_key_map,
+	.keymap_size = ARRAY_SIZE(herring_keypad_key_map)
+};
+
+static struct gpio_event_info *herring_input_info[] = {
+	&herring_keypad_key_info.info,
+};
+
+
+static struct gpio_event_platform_data herring_input_data = {
+	.names = {
+		"herring-keypad",
+		NULL,
+	},
+	.info = herring_input_info,
+	.info_count = ARRAY_SIZE(herring_input_info),
+};
+
+static struct platform_device herring_input_device = {
+	.name = GPIO_EVENT_DEV_NAME,
+	.id = 0,
+	.dev = {
+		.platform_data = &herring_input_data,
+	},
+};
+
+#define FLASH_MOVIE_MODE_CURRENT_50_PERCENT	7
+
+#define FLASH_TIME_LATCH_US			500
+#define FLASH_TIME_EN_SET_US			1
+
+/* Interface setting */
+static struct s3c_platform_fimc fimc_plat_lsi = {
+	.srclk_name	= "mout_mpll",
+	.clk_name	= "sclk_fimc",
+	.lclk_name	= "sclk_fimc_lclk",
+	.clk_rate	= 166750000,
+//	.default_cam	= CAMERA_PAR_A,
+//	.camera		= {
+//		&s5k4ecgx,
+//		&s5ka3dfx,
+//	},
+	.hw_ver		= 0x43,
+};
+
+#ifdef CONFIG_VIDEO_JPEG_V2
+static struct s3c_platform_jpeg jpeg_plat __initdata = {
+	.max_main_width	= 800,
+	.max_main_height	= 480,
+	.max_thumb_width	= 320,
+	.max_thumb_height	= 240,
+};
+#endif
+
+
+static struct resource ram_console_resource[] = {
+	{
+		.flags = IORESOURCE_MEM,
+	}
+};
+
+static struct platform_device ram_console_device = {
+	.name = "ram_console",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(ram_console_resource),
+	.resource = ram_console_resource,
+};
+
+#ifdef CONFIG_ANDROID_PMEM
+static struct android_pmem_platform_data pmem_pdata = {
+	.name = "pmem",
+	.no_allocator = 1,
+	.cached = 1,
+	.start = 0,
+	.size = 0,
+};
+
+static struct android_pmem_platform_data pmem_gpu1_pdata = {
+	.name = "pmem_gpu1",
+	.no_allocator = 1,
+	.cached = 1,
+	.buffered = 1,
+	.start = 0,
+	.size = 0,
+};
+
+static struct android_pmem_platform_data pmem_adsp_pdata = {
+	.name = "pmem_adsp",
+	.no_allocator = 1,
+	.cached = 1,
+	.buffered = 1,
+	.start = 0,
+	.size = 0,
+};
+
+static struct platform_device pmem_device = {
+	.name = "android_pmem",
+	.id = 0,
+	.dev = { .platform_data = &pmem_pdata },
+};
+
+static struct platform_device pmem_gpu1_device = {
+	.name = "android_pmem",
+	.id = 1,
+	.dev = { .platform_data = &pmem_gpu1_pdata },
+};
+
+static struct platform_device pmem_adsp_device = {
+	.name = "android_pmem",
+	.id = 2,
+	.dev = { .platform_data = &pmem_adsp_pdata },
+};
+
+static void __init android_pmem_set_platdata(void)
+{
+	pmem_pdata.start = (u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM, 0);
+	pmem_pdata.size = (u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM, 0);
+
+	pmem_gpu1_pdata.start =
+		(u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM_GPU1, 0);
+	pmem_gpu1_pdata.size =
+		(u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM_GPU1, 0);
+
+	pmem_adsp_pdata.start =
+		(u32)s5p_get_media_memory_bank(S5P_MDEV_PMEM_ADSP, 0);
+	pmem_adsp_pdata.size =
+		(u32)s5p_get_media_memsize_bank(S5P_MDEV_PMEM_ADSP, 0);
+}
+#endif
+
+
+#define S3C_GPIO_SETPIN_ZERO         0
+#define S3C_GPIO_SETPIN_ONE          1
+#define S3C_GPIO_SETPIN_NONE	     2
+
+struct gpio_init_data {
+	uint num;
+	uint cfg;
+	uint val;
+	uint pud;
+	uint drv;
+};
+
+static struct gpio_init_data herring_init_gpios[] = {
+	{
+		.num	= S5PV210_GPB(0),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+
+	}, {
+		.num	= S5PV210_GPB(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(5),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPB(7),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPC0(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC0(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC0(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC0(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPC1(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC1(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC1(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC1(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPC1(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPD0(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD0(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD0(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPD1(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD1(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD1(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD1(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD1(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPD1(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPE0(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE0(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+
+	{
+		.num	= S5PV210_GPE1(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE1(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE1(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE1(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPE1(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPF3(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPF3(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPG0(0),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG0(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPG1(0),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG1(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPG2(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG2(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPG3(0),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPG3(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPH0(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(5),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH0(7),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPH1(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH1(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH1(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH1(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* NFC_IRQ */
+		.num	= S5PV210_GPH1(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* NFC_EN */
+		.num	= S5PV210_GPH1(5),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* NFC_FIRM */
+		.num	= S5PV210_GPH1(6),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH1(7),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPH2(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(5),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(6),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH2(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPH3(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_UP,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(1),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(2),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* GPIO_EAR_SEND_END */
+		.num	= S5PV210_GPH3(6),
+		.cfg	= S3C_GPIO_SFN(GPIO_EAR_SEND_END_AF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPH3(7),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPI(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPI(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPJ0(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(5),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(6),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ0(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPJ1(0),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ1(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ1(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ1(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ1(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ1(5),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPJ2(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(1),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(3),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ2(7),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPJ3(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* GPIO_EAR_ADC_SEL */
+		.num	= S5PV210_GPJ3(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ3(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_GPJ4(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ4(1),
+		.cfg	= S3C_GPIO_SFN(0xF),
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ4(2),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ4(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_GPJ4(4),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_MP01(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP01(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP01(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_MP02(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP02(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP02(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_MP03(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP03(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP03(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP03(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_MP04(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP04(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* NFC_SCL_18V - has external pull up resistor */
+		.num	= S5PV210_MP04(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, { /* NFC_SDA_18V - has external pull up resistor */
+		.num	= S5PV210_MP04(5),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP04(6),
+		.cfg	= S3C_GPIO_OUTPUT,
+		.val	= S3C_GPIO_SETPIN_ZERO,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP04(7),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+
+	{
+		.num	= S5PV210_MP05(0),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP05(1),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP05(2),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP05(3),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_NONE,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP05(4),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	}, {
+		.num	= S5PV210_MP05(6),
+		.cfg	= S3C_GPIO_INPUT,
+		.val	= S3C_GPIO_SETPIN_NONE,
+		.pud	= S3C_GPIO_PULL_DOWN,
+		.drv	= S3C_GPIO_DRVSTR_1X,
+	},
+};
+
+void s3c_config_gpio_table(void)
+{
+	u32 i, gpio;
+
+	for (i = 0; i < ARRAY_SIZE(herring_init_gpios); i++) {
+		gpio = herring_init_gpios[i].num;
+		if (system_rev <= 0x07 && gpio == S5PV210_GPJ3(3)) {
+			s3c_gpio_cfgpin(gpio, S3C_GPIO_OUTPUT);
+			gpio_set_value(gpio, S3C_GPIO_SETPIN_ONE);
+		} else if (gpio <= S5PV210_MP05(7)) {
+			s3c_gpio_cfgpin(gpio, herring_init_gpios[i].cfg);
+			s3c_gpio_setpull(gpio, herring_init_gpios[i].pud);
+
+			if (herring_init_gpios[i].val != S3C_GPIO_SETPIN_NONE)
+				gpio_set_value(gpio, herring_init_gpios[i].val);
+
+			s3c_gpio_set_drvstrength(gpio,
+					herring_init_gpios[i].drv);
+		}
+	}
+
+}
+
+#define S5PV210_PS_HOLD_CONTROL_REG (S3C_VA_SYS+0xE81C)
+
+/* this table only for B4 board */
+static unsigned int herring_sleep_gpio_table[][3] = {
+	{ S5PV210_GPA0(0), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA0(1), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA0(2), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA0(3), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA0(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPA0(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA0(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPA0(7), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPA1(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPA1(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPA1(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPA1(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPB(0),  S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(1),  S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(2),  S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(3),  S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(4),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(5),  S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPB(6),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPB(7),  S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPC0(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC0(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC0(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC0(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC0(4), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPC1(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC1(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC1(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC1(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPC1(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPD0(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPD0(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPD0(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPD0(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPD1(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPD1(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPD1(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPD1(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPD1(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPD1(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPE0(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE0(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPE1(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE1(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE1(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPE1(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPE1(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPF0(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(4), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(6), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF0(7), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPF1(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(4), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(6), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF1(7), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPF2(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(4), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(6), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF2(7), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPF3(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF3(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF3(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF3(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF3(4), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPF3(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPG0(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG0(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG0(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG0(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG0(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG0(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG0(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPG1(0), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG1(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG1(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG1(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG1(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG1(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG1(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPG2(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPG2(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPG3(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(1), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(2), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(3), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(4), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(5), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPG3(6), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+
+	/* Alive part ending and off part start*/
+	{ S5PV210_GPI(0),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(1),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(2),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(3),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(4),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(5),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPI(6),  S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPJ0(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ0(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ0(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ0(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ0(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ0(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ0(6), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ0(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPJ1(0), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ1(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ1(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ1(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ1(4), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ1(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPJ2(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(3), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ2(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ2(7), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_GPJ3(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ3(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ3(2), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ3(3), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ3(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ3(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ3(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ3(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_GPJ4(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ4(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_GPJ4(2), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ4(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_GPJ4(4), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+
+	/* memory part */
+	{ S5PV210_MP01(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP01(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP01(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP01(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP01(4), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP01(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP01(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP01(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_MP02(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP02(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP02(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP02(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_MP03(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP03(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP03(2), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP03(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP03(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP03(5), S3C_GPIO_SLP_OUT1,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP03(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP03(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_MP04(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP04(1), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP04(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP04(3), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP04(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP04(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP04(6), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP04(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_MP05(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP05(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP05(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP05(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP05(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP05(5), S3C_GPIO_SLP_OUT0,	S3C_GPIO_PULL_NONE},
+	{ S5PV210_MP05(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP05(7), S3C_GPIO_SLP_PREV,	S3C_GPIO_PULL_NONE},
+
+	{ S5PV210_MP06(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP06(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	{ S5PV210_MP07(0), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(1), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(2), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(3), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(4), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(5), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(6), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+	{ S5PV210_MP07(7), S3C_GPIO_SLP_INPUT,	S3C_GPIO_PULL_DOWN},
+
+	/* Memory part ending and off part ending */
+};
+
+void s3c_config_sleep_gpio_table(int array_size, unsigned int (*gpio_table)[3])
+{
+	u32 i, gpio;
+
+	for (i = 0; i < array_size; i++) {
+		gpio = gpio_table[i][0];
+		s3c_gpio_slp_cfgpin(gpio, gpio_table[i][1]);
+		s3c_gpio_slp_setpull_updown(gpio, gpio_table[i][2]);
+	}
+}
+
+static struct platform_device watchdog_device = {
+	.name = "watchdog",
+	.id = -1,
+};
+
+static struct platform_device *herring_devices[] __initdata = {
+	&watchdog_device,
+#ifdef CONFIG_FIQ_DEBUGGER
+	&s5pv210_device_fiqdbg_uart2,
+#endif
+	&s5pc110_device_onenand,
+#ifdef CONFIG_RTC_DRV_S3C
+	&s5p_device_rtc,
+#endif
+	// &herring_input_device,
+
+	// &s5pv210_device_iis0,
+	&s3c_device_wdt,
+
+#ifdef CONFIG_FB_S3C
+	&s3c_device_fb,
+#endif
+
+#ifdef CONFIG_VIDEO_MFC50
+	&s3c_device_mfc,
+#endif
+#ifdef	CONFIG_S5P_ADC
+#endif
+#ifdef CONFIG_VIDEO_FIMC
+	&s3c_device_fimc0,
+	&s3c_device_fimc1,
+	&s3c_device_fimc2,
+#endif
+
+#ifdef CONFIG_VIDEO_JPEG_V2
+	&s3c_device_jpeg,
+#endif
+
+	&s3c_device_g3d,
+	&s3c_device_lcd,
+
+#ifdef CONFIG_FB_S3C_TL2796
+#endif
+
+/*********************************
+	&s3c_device_i2c0,
+#if defined(CONFIG_S3C_DEV_I2C1)
+	&s3c_device_i2c1,
+#endif
+
+#if defined(CONFIG_S3C_DEV_I2C2)
+	&s3c_device_i2c2,
+#endif
+	&s3c_device_i2c4,
+	&s3c_device_i2c6,
+	&s3c_device_i2c7,
+	&s3c_device_i2c8,  // gyro sensor
+	&s3c_device_i2c9,  // max1704x:fuel_guage
+	&s3c_device_i2c11, // optical sensor
+	&s3c_device_i2c12, // magnetic sensor
+	&s3c_device_i2c14, // nfc sensor
+********************************/
+#ifdef CONFIG_USB_GADGET
+	&s3c_device_usbgadget,
+#endif
+#ifdef CONFIG_USB_ANDROID
+	&s3c_device_android_usb,
+#ifdef CONFIG_USB_ANDROID_MASS_STORAGE
+	&s3c_device_usb_mass_storage,
+#endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	&s3c_device_rndis,
+#endif
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC
+	&s3c_device_hsmmc0,
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC1
+	&s3c_device_hsmmc1,
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC2
+	&s3c_device_hsmmc2,
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC3
+	&s3c_device_hsmmc3,
+#endif
+
+#ifdef CONFIG_S5PV210_POWER_DOMAIN
+	&s5pv210_pd_audio,
+	&s5pv210_pd_cam,
+	&s5pv210_pd_tv,
+	&s5pv210_pd_lcd,
+	&s5pv210_pd_g3d,
+	&s5pv210_pd_mfc,
+#endif
+
+#ifdef CONFIG_ANDROID_PMEM
+	&pmem_device,
+	&pmem_gpu1_device,
+	&pmem_adsp_device,
+#endif
+
+#ifdef CONFIG_HAVE_PWM
+	&s3c_device_timer[0],
+	&s3c_device_timer[1],
+	&s3c_device_timer[2],
+	&s3c_device_timer[3],
+#endif
+
+#ifdef CONFIG_CPU_FREQ
+	&s5pv210_device_cpufreq,
+#endif
+
+	&ram_console_device,
+};
+
+unsigned int HWREV;
+EXPORT_SYMBOL(HWREV);
+
+static void __init herring_map_io(void)
+{
+	s5p_init_io(NULL, 0, S5P_VA_CHIPID);
+	s3c24xx_init_clocks(24000000);
+	s5pv210_gpiolib_init();
+	s3c24xx_init_uarts(herring_uartcfgs, ARRAY_SIZE(herring_uartcfgs));
+	s5p_reserve_bootmem(herring_media_devs, ARRAY_SIZE(herring_media_devs));
+#ifdef CONFIG_MTD_ONENAND
+	s5pc110_device_onenand.name = "s5pc110-onenand";
+#endif
+}
+
+static void __init ezs5pv210_map_io(void)
+{
+	s5p_init_io(NULL, 0, S5P_VA_CHIPID);
+	s3c24xx_init_clocks(24000000);
+	s3c24xx_init_uarts(ezs5pv210_uartcfgs, ARRAY_SIZE(ezs5pv210_uartcfgs));
+// boggle70
+// media device 는 mach-smdkv21.c 에서는 하지 않고 다른 얘들만 하고 있다.
+//	s5p_reserve_bootmem();
+}
+
+
+unsigned int pm_debug_scratchpad;
+
+static unsigned int ram_console_start;
+static unsigned int ram_console_size;
+
+static void __init herring_fixup(struct machine_desc *desc,
+		struct tag *tags, char **cmdline,
+		struct meminfo *mi)
+{
+	mi->bank[0].start = 0x30000000;
+	mi->bank[0].size = 80 * SZ_1M;
+	mi->bank[0].node = 0;
+
+	mi->bank[1].start = 0x40000000;
+	mi->bank[1].size = 256 * SZ_1M;
+	mi->bank[1].node = 1;
+
+	mi->bank[2].start = 0x50000000;
+	/* 1M for ram_console buffer */
+	mi->bank[2].size = 127 * SZ_1M;
+	mi->bank[2].node = 2;
+	mi->nr_banks = 3;
+
+	ram_console_start = mi->bank[2].start + mi->bank[2].size;
+	ram_console_size = SZ_1M - SZ_4K;
+
+	pm_debug_scratchpad = ram_console_start + ram_console_size;
+}
+
+/* this function are used to detect s5pc110 chip version temporally */
+
+static void herring_init_gpio(void)
+{
+	s3c_config_gpio_table();
+	s3c_config_sleep_gpio_table(ARRAY_SIZE(herring_sleep_gpio_table),
+			herring_sleep_gpio_table);
+}
+
+static void __init fsa9480_gpio_init(void)
+{
+	s3c_gpio_cfgpin(GPIO_USB_SEL, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_USB_SEL, S3C_GPIO_PULL_NONE);
+
+	s3c_gpio_cfgpin(GPIO_UART_SEL, S3C_GPIO_OUTPUT);
+	s3c_gpio_setpull(GPIO_UART_SEL, S3C_GPIO_PULL_NONE);
+
+}
+
+static void __init setup_ram_console_mem(void)
+{
+	ram_console_resource[0].start = ram_console_start;
+	ram_console_resource[0].end = ram_console_start + ram_console_size - 1;
+}
+
+static void __init sound_init(void)
+{
+	u32 reg;
+
+	reg = __raw_readl(S5P_OTHERS);
+	reg &= ~(0x3 << 8);
+	reg |= 3 << 8;
+	__raw_writel(reg, S5P_OTHERS);
+
+	reg = __raw_readl(S5P_CLK_OUT);
+	reg &= ~(0x1f << 12);
+	reg |= 19 << 12;
+	__raw_writel(reg, S5P_CLK_OUT);
+
+	reg = __raw_readl(S5P_CLK_OUT);
+	reg &= ~0x1;
+	reg |= 0x1;
+	__raw_writel(reg, S5P_CLK_OUT);
+
+	gpio_request(GPIO_MICBIAS_EN, "micbias_enable");
+}
+
+static bool console_flushed;
+
+static void flush_console(void)
+{
+	if (console_flushed)
+		return;
+
+	console_flushed = true;
+
+	printk("\n");
+	pr_emerg("Restarting %s\n", linux_banner);
+	if (!try_acquire_console_sem()) {
+		release_console_sem();
+		return;
+	}
+
+	mdelay(50);
+
+	local_irq_disable();
+	if (try_acquire_console_sem())
+		pr_emerg("flush_console: console was locked! busting!\n");
+	else
+		pr_emerg("flush_console: console was locked!\n");
+	release_console_sem();
+}
+
+static void herring_pm_restart(char mode, const char *cmd)
+{
+	flush_console();
+
+	/* On a normal reboot, INFORM6 will contain a small integer
+	 * reason code from the notifier hook.  On a panic, it will
+	 * contain the 0xee we set at boot.  Write 0xbb to differentiate
+	 * a watchdog-timeout-and-reboot (0xee) from a controlled reboot
+	 * (0xbb)
+	 */
+	if (__raw_readl(S5P_INFORM6) == 0xee)
+		__raw_writel(0xbb, S5P_INFORM6);
+
+	arm_machine_restart(mode, cmd);
+}
+
+static void __init herring_machine_init(void)
+{
+	arm_pm_restart = herring_pm_restart;
+
+	setup_ram_console_mem();
+	s3c_usb_set_serial();
+	platform_add_devices(herring_devices, ARRAY_SIZE(herring_devices));
+
+	// pm_power_off = herring_power_off ;
+
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE0, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE0, S3C_GPIO_PULL_NONE);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE1, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE1, S3C_GPIO_PULL_NONE);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE2, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE2, S3C_GPIO_PULL_NONE);
+	HWREV = gpio_get_value(GPIO_HWREV_MODE0);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE1) << 1);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE2) << 2);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE3, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE3, S3C_GPIO_PULL_NONE);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE3) << 3);
+	printk(KERN_INFO "HWREV is 0x%x\n", HWREV);
+
+	/*initialise the gpio's*/
+	herring_init_gpio();
+
+#ifdef CONFIG_ANDROID_PMEM
+	android_pmem_set_platdata();
+#endif
+
+#if defined(CONFIG_PM)
+	s3c_pm_init();
+#endif
+
+
+#ifdef CONFIG_VIDEO_FIMC
+	/* fimc */
+	s3c_fimc0_set_platdata(&fimc_plat_lsi);
+	s3c_fimc1_set_platdata(&fimc_plat_lsi);
+	s3c_fimc2_set_platdata(&fimc_plat_lsi);
+#endif
+
+#ifdef CONFIG_VIDEO_JPEG_V2
+	s3c_jpeg_set_platdata(&jpeg_plat);
+#endif
+
+#ifdef CONFIG_VIDEO_MFC50
+	/* mfc */
+	s3c_mfc_set_platdata(NULL);
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC
+	s5pv210_default_sdhci0();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC1
+	s5pv210_default_sdhci1();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC2
+	s5pv210_default_sdhci2();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC3
+	s5pv210_default_sdhci3();
+#endif
+#ifdef CONFIG_S5PV210_SETUP_SDHCI
+	s3c_sdhci_set_platdata();
+#endif
+
+#ifdef CONFIG_CPU_FREQ
+	s5pv210_cpufreq_set_platdata(&smdkc110_cpufreq_plat);
+#endif
+
+	regulator_has_full_constraints();
+
+	/* write something into the INFORM6 register that we can use to
+	 * differentiate an unclear reboot from a clean reboot (which
+	 * writes a small integer code to INFORM6).
+	 */
+	__raw_writel(0xee, S5P_INFORM6);
+}
+
+
+static void __init ezs5pv210_machine_init(void)
+{
+	// arm_pm_restart = herring_pm_restart;
+
+	setup_ram_console_mem();
+	s3c_usb_set_serial();
+	platform_add_devices(herring_devices, ARRAY_SIZE(herring_devices));
+
+	// pm_power_off = herring_power_off ;
+
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE0, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE0, S3C_GPIO_PULL_NONE);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE1, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE1, S3C_GPIO_PULL_NONE);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE2, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE2, S3C_GPIO_PULL_NONE);
+	HWREV = gpio_get_value(GPIO_HWREV_MODE0);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE1) << 1);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE2) << 2);
+	s3c_gpio_cfgpin(GPIO_HWREV_MODE3, S3C_GPIO_INPUT);
+	s3c_gpio_setpull(GPIO_HWREV_MODE3, S3C_GPIO_PULL_NONE);
+	HWREV = HWREV | (gpio_get_value(GPIO_HWREV_MODE3) << 3);
+	printk(KERN_INFO "HWREV is 0x%x\n", HWREV);
+
+	/*initialise the gpio's*/
+	// herring_init_gpio();
+
+#ifdef CONFIG_ANDROID_PMEM
+	android_pmem_set_platdata();
+#endif
+
+#if defined(CONFIG_PM)
+	s3c_pm_init();
+#endif
+
+
+#ifdef CONFIG_VIDEO_FIMC
+	/* fimc */
+	s3c_fimc0_set_platdata(&fimc_plat_lsi);
+	s3c_fimc1_set_platdata(&fimc_plat_lsi);
+	s3c_fimc2_set_platdata(&fimc_plat_lsi);
+#endif
+
+#ifdef CONFIG_VIDEO_JPEG_V2
+	s3c_jpeg_set_platdata(&jpeg_plat);
+#endif
+
+#ifdef CONFIG_VIDEO_MFC50
+	/* mfc */
+	s3c_mfc_set_platdata(NULL);
+#endif
+
+#ifdef CONFIG_S3C_DEV_HSMMC
+	s5pv210_default_sdhci0();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC1
+	s5pv210_default_sdhci1();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC2
+	s5pv210_default_sdhci2();
+#endif
+#ifdef CONFIG_S3C_DEV_HSMMC3
+	s5pv210_default_sdhci3();
+#endif
+#ifdef CONFIG_S5PV210_SETUP_SDHCI
+	s3c_sdhci_set_platdata();
+#endif
+
+#ifdef CONFIG_CPU_FREQ
+	s5pv210_cpufreq_set_platdata(&smdkc110_cpufreq_plat);
+#endif
+
+	regulator_has_full_constraints();
+
+	/* write something into the INFORM6 register that we can use to
+	 * differentiate an unclear reboot from a clean reboot (which
+	 * writes a small integer code to INFORM6).
+	 */
+	__raw_writel(0xee, S5P_INFORM6);
+}
+
+
+#ifdef CONFIG_USB_SUPPORT
+/* Initializes OTG Phy. */
+void otg_phy_init(void)
+{
+	/* USB PHY0 Enable */
+	writel(readl(S5P_USB_PHY_CONTROL) | (0x1<<0),
+			S5P_USB_PHY_CONTROL);
+	writel((readl(S3C_USBOTG_PHYPWR) & ~(0x3<<3) & ~(0x1<<0)) | (0x1<<5),
+			S3C_USBOTG_PHYPWR);
+	writel((readl(S3C_USBOTG_PHYCLK) & ~(0x5<<2)) | (0x3<<0),
+			S3C_USBOTG_PHYCLK);
+	writel((readl(S3C_USBOTG_RSTCON) & ~(0x3<<1)) | (0x1<<0),
+			S3C_USBOTG_RSTCON);
+	msleep(1);
+	writel(readl(S3C_USBOTG_RSTCON) & ~(0x7<<0),
+			S3C_USBOTG_RSTCON);
+	msleep(1);
+
+	/* rising/falling time */
+	writel(readl(S3C_USBOTG_PHYTUNE) | (0x1<<20),
+			S3C_USBOTG_PHYTUNE);
+
+	/* set DC level as 0xf (24%) */
+	writel(readl(S3C_USBOTG_PHYTUNE) | 0xf, S3C_USBOTG_PHYTUNE);
+}
+EXPORT_SYMBOL(otg_phy_init);
+
+/* USB Control request data struct must be located here for DMA transfer */
+struct usb_ctrlrequest usb_ctrl __attribute__((aligned(64)));
+
+/* OTG PHY Power Off */
+void otg_phy_off(void)
+{
+	writel(readl(S3C_USBOTG_PHYPWR) | (0x3<<3),
+			S3C_USBOTG_PHYPWR);
+	writel(readl(S5P_USB_PHY_CONTROL) & ~(1<<0),
+			S5P_USB_PHY_CONTROL);
+}
+EXPORT_SYMBOL(otg_phy_off);
+
+void usb_host_phy_init(void)
+{
+	struct clk *otg_clk;
+
+	otg_clk = clk_get(NULL, "otg");
+	clk_enable(otg_clk);
+
+	if (readl(S5P_USB_PHY_CONTROL) & (0x1<<1))
+		return;
+
+	__raw_writel(__raw_readl(S5P_USB_PHY_CONTROL) | (0x1<<1),
+			S5P_USB_PHY_CONTROL);
+	__raw_writel((__raw_readl(S3C_USBOTG_PHYPWR)
+			& ~(0x1<<7) & ~(0x1<<6)) | (0x1<<8) | (0x1<<5),
+			S3C_USBOTG_PHYPWR);
+	__raw_writel((__raw_readl(S3C_USBOTG_PHYCLK) & ~(0x1<<7)) | (0x3<<0),
+			S3C_USBOTG_PHYCLK);
+	__raw_writel((__raw_readl(S3C_USBOTG_RSTCON)) | (0x1<<4) | (0x1<<3),
+			S3C_USBOTG_RSTCON);
+	__raw_writel(__raw_readl(S3C_USBOTG_RSTCON) & ~(0x1<<4) & ~(0x1<<3),
+			S3C_USBOTG_RSTCON);
+}
+EXPORT_SYMBOL(usb_host_phy_init);
+
+void usb_host_phy_off(void)
+{
+	__raw_writel(__raw_readl(S3C_USBOTG_PHYPWR) | (0x1<<7)|(0x1<<6),
+			S3C_USBOTG_PHYPWR);
+	__raw_writel(__raw_readl(S5P_USB_PHY_CONTROL) & ~(1<<1),
+			S5P_USB_PHY_CONTROL);
+}
+EXPORT_SYMBOL(usb_host_phy_off);
+#endif
+
+MACHINE_START(SMDKC110, "SMDKC110")
+	/* Maintainer: Kukjin Kim <kgene.kim@samsung.com> */
+	.phys_io	= S3C_PA_UART & 0xfff00000,
+	.io_pg_offst	= (((u32)S3C_VA_UART) >> 18) & 0xfffc,
+	.boot_params	= S5P_PA_SDRAM + 0x100,
+	.fixup		= herring_fixup,
+	.init_irq	= s5pv210_init_irq,
+	.map_io		= herring_map_io,
+	.init_machine	= herring_machine_init,
+#if	defined(CONFIG_S5P_HIGH_RES_TIMERS)
+	.timer		= &s5p_systimer,
+#else
+	.timer		= &s3c24xx_timer,
+#endif
+MACHINE_END
+
+/******************************
+
+MACHINE_START(HERRING, "herring")
+	.phys_io	= S3C_PA_UART & 0xfff00000,
+	.io_pg_offst	= (((u32)S3C_VA_UART) >> 18) & 0xfffc,
+	.boot_params	= S5P_PA_SDRAM + 0x100,
+	.fixup		= herring_fixup,
+	.init_irq	= s5pv210_init_irq,
+	.map_io		= herring_map_io,
+	.init_machine	= herring_machine_init,
+	.timer		= &s5p_systimer,
+MACHINE_END
+
+***************************/
+
+MACHINE_START(EZS5PV210, "EZS5PV210")
+	/* Maintainer: Kukjin Kim <kgene.kim@samsung.com> */
+	.phys_io		= S5PV210_PA_UART & 0xfff00000,
+	.io_pg_offst	= (((u32)S3C_VA_UART) >> 18) & 0xfffc,
+	.boot_params	= S5P_PA_SDRAM + 0x100,
+	.init_irq		= s5pv210_init_irq,
+	.init_irq		= s5pv210_init_irq,
+	.map_io			= ezs5pv210_map_io,
+	.init_machine	= ezs5pv210_machine_init,
+	.timer			= &s3c24xx_timer,
+MACHINE_END
+
+void s3c_setup_uart_cfg_gpio(unsigned char port)
+{
+	switch (port) {
+	case 0:
+		s3c_gpio_cfgpin(GPIO_BT_RXD, S3C_GPIO_SFN(GPIO_BT_RXD_AF));
+		s3c_gpio_setpull(GPIO_BT_RXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_cfgpin(GPIO_BT_TXD, S3C_GPIO_SFN(GPIO_BT_TXD_AF));
+		s3c_gpio_setpull(GPIO_BT_TXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_cfgpin(GPIO_BT_CTS, S3C_GPIO_SFN(GPIO_BT_CTS_AF));
+		s3c_gpio_setpull(GPIO_BT_CTS, S3C_GPIO_PULL_NONE);
+		s3c_gpio_cfgpin(GPIO_BT_RTS, S3C_GPIO_SFN(GPIO_BT_RTS_AF));
+		s3c_gpio_setpull(GPIO_BT_RTS, S3C_GPIO_PULL_NONE);
+		s3c_gpio_slp_cfgpin(GPIO_BT_RXD, S3C_GPIO_SLP_PREV);
+		s3c_gpio_slp_setpull_updown(GPIO_BT_RXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_slp_cfgpin(GPIO_BT_TXD, S3C_GPIO_SLP_PREV);
+		s3c_gpio_slp_setpull_updown(GPIO_BT_TXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_slp_cfgpin(GPIO_BT_CTS, S3C_GPIO_SLP_PREV);
+		s3c_gpio_slp_setpull_updown(GPIO_BT_CTS, S3C_GPIO_PULL_NONE);
+		s3c_gpio_slp_cfgpin(GPIO_BT_RTS, S3C_GPIO_SLP_PREV);
+		s3c_gpio_slp_setpull_updown(GPIO_BT_RTS, S3C_GPIO_PULL_NONE);
+		break;
+		break;
+	case 2:
+		s3c_gpio_cfgpin(GPIO_AP_RXD, S3C_GPIO_SFN(GPIO_AP_RXD_AF));
+		s3c_gpio_setpull(GPIO_AP_RXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_cfgpin(GPIO_AP_TXD, S3C_GPIO_SFN(GPIO_AP_TXD_AF));
+		s3c_gpio_setpull(GPIO_AP_TXD, S3C_GPIO_PULL_NONE);
+		break;
+	case 3:
+		s3c_gpio_cfgpin(GPIO_FLM_RXD, S3C_GPIO_SFN(GPIO_FLM_RXD_AF));
+		s3c_gpio_setpull(GPIO_FLM_RXD, S3C_GPIO_PULL_NONE);
+		s3c_gpio_cfgpin(GPIO_FLM_TXD, S3C_GPIO_SFN(GPIO_FLM_TXD_AF));
+		s3c_gpio_setpull(GPIO_FLM_TXD, S3C_GPIO_PULL_NONE);
+		break;
+	default:
+		break;
+	}
+}
+EXPORT_SYMBOL(s3c_setup_uart_cfg_gpio);
+------------------------------------------------------------
+
+./arch/arm/plat-samsung/Kconfig 파일에서 다음을 제거 한다.
+------------------------------------------------------------
+204 config S3C_DEV_NAND
+205    bool
+206    help
+207      Compile in platform device definition for NAND controller
+------------------------------------------------------------
+
+
+arch/arm/plat-samsung/dev-nand.c 파일을 다음과 같이 패치 한다.
+S3C_PA_NAND 이 선언이 되어 있지 않다. 이 선언은 S3C2410 과 관련하여 선언 되어 있다.
+아래와 같이 패치 한다.
+------------------------------------------------------------
+ 22 //      .start = S3C_PA_NAND,                                                                                     
+ 23 //      .end   = S3C_PA_NAND + SZ_1M,
+ 24         .start = S5P_PA_NAND,
+ 25         .end   = S5P_PA_NAND + SZ_1M,
+------------------------------------------------------------
+
+
+
+빌드시 다음과 같은 에러가 발생 하였다.
+arch/arm/mach-s5pv210/built-in.o: In function `s5pv210_pd_enable_time':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:438: undefined reference to `rdev_get_drvdata'
+arch/arm/mach-s5pv210/built-in.o: In function `s5pv210_pd_is_enabled':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:397: undefined reference to `rdev_get_drvdata'
+arch/arm/mach-s5pv210/built-in.o: In function `s5pv210_pd_get_voltage':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:445: undefined reference to `rdev_get_drvdata'
+arch/arm/mach-s5pv210/built-in.o: In function `s5pv210_pd_list_voltage':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:453: undefined reference to `rdev_get_drvdata'
+arch/arm/mach-s5pv210/built-in.o: In function `s5pv210_pd_disable':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:424: undefined reference to `rdev_get_drvdata'
+arch/arm/mach-s5pv210/built-in.o:/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:404: more undefined references to `rdev_get_drvdata' follow
+arch/arm/mach-s5pv210/built-in.o: In function `reg_s5pv210_pd_probe':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:501: undefined reference to `regulator_register'
+arch/arm/mach-s5pv210/built-in.o: In function `reg_s5pv210_pd_remove':
+/staff/I11-0060_zeroboot2/sdk/version-1.0.0/kernel/samsung-kernel-crespo-falinux/arch/arm/mach-s5pv210/power-domain.c:527: undefined reference to `regulator_unregister'
+arch/arm/mach-s5pv210/built-in.o: In function `s3c_cpu_resume':
+dev-cpufreq.c:(.data+0x3b8c): undefined reference to `s3c_device_fimc0'
+dev-cpufreq.c:(.data+0x3b94): undefined reference to `s3c_device_fimc1'
+dev-cpufreq.c:(.data+0x3b9c): undefined reference to `s3c_device_fimc2'
+dev-cpufreq.c:(.data+0x3ba4): undefined reference to `s3c_device_csis'
+make[1]: *** [.tmp_vmlinux1] Error 1
+
+./arch/arm/mach-s5pv210/Kconfig 파일에서 MACH_EZS5PV210 에 있는 다음의 옵션을 제거 한다.
+------------------------------------------------------------
+164     select S5PV210_POWER_DOMAIN
+------------------------------------------------------------
+
+
+다음과 같은 메시지까지 출력 되고 부팅이 멈추었다.
+------------------------------------------------------------
+
+Copy Kernel Image [filename=zImage.crespo-falinux,size=2842624,address=20008000]
+Copy ramdisk [filename=ramdisk-1.14-24M.gz,size=5644288,address=20800000]
+Starting kernel [MARCH 4001]...
+kernel command [EZBOOT mem=256M initrd=0x20800000,8M root=/dev/ram0 ramdisk=24576 console=ttySAC2,115200 init=/init /init.rc   ip0=192.168.10.85 mac=00:fa]
+
+------------------------------------------------------------
+
+디버깅을 위해서 config 에서 kernel 의 debug 관련 부분을 활성화 시키고 다시 커널을 빌드하여 시험해본다.
+------------------------------------------------------------
+Copy Kernel Image [filename=zImage.crespo-falinux,size=2842624,address=20008000]
+Copy ramdisk [filename=ramdisk-1.14-24M.gz,size=5644288,address=20800000]
+Starting kernel [MARCH 4001]...
+kernel command [EZBOOT mem=256M initrd=0x20800000,8M root=/dev/ram0 ramdisk=24576 console=ttySAC2,115200 init=/init /init.rc   ip0=192.168.10.85 mac=00:fa]
+------------------------------------------------------------
+
+똑같이 멈추었다. 시리얼과 관련하여 무엇인가 설정이 잘못 된것 같은 느낌이다.
+
+
+
+메모리와 관련하여 아래의 2개의 파일의 내용을 수정 해야 한다. ( SDRAM 시작 위치 0x20000000 or 0x30000000 )
+arch/arm/mach-s5pv210/include/mach/map.h
+arch/arm/mach-s5pv210/include/mach/memory.h
+------------------------------------------------------------
+
+------------------------------------------------------------
+
+UART와 관련하여 아래의 UART의 및 기타 BASE ADDRESS 값(Virtual Addr)을 수정한다.
+./arch/arm/plat-samsung/include/plat/map-base.h 파일을 다음과 같이 하여 ADDR_BASE 값을 수정한다.
+------------------------------------------------------------
+ 25 #ifdef CONFIG_MACH_EZS5PV210
+ 26 #define S3C_ADDR_BASE   (0xF4000000)
+ 27 #else
+ 28 #define S3C_ADDR_BASE   (0xFD000000)
+ 29 #endif
+------------------------------------------------------------
+
+
+
